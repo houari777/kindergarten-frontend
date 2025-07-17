@@ -1,0 +1,138 @@
+/* Dashboard Global Styles */
+.dashboard-container {
+  padding: 30px;
+  background-color: #f5f7fa;
+  min-height: calc(100vh - 64px);
+}
+
+/* Cards */
+.dashboard-card {
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  margin-bottom: 25px;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  border: none;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+/* Statistics Cards */
+.stat-card {
+  height: 100%;
+  text-align: center;
+  padding: 25px 15px;
+  background: #1a237e;
+  color: white;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.stat-card .ant-statistic-title {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 18px !important;
+  margin-bottom: 15px;
+}
+
+.stat-card .ant-statistic-content {
+  color: white;
+}
+
+.stat-card .ant-statistic-content-value {
+  font-size: 28px !important;
+  font-weight: 600;
+}
+
+/* Charts */
+.chart-container {
+  background: white;
+  padding: 25px;
+  border-radius: 12px;
+  margin-bottom: 25px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* Tables */
+.dashboard-table {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.dashboard-table .ant-table {
+  font-size: 16px;
+}
+
+.dashboard-table .ant-table-thead > tr > th {
+  background: #1a237e;
+  color: white;
+  font-weight: 600;
+  font-size: 16px;
+  padding: 16px;
+}
+
+.dashboard-table .ant-table-tbody > tr > td {
+  padding: 16px;
+  font-size: 15px;
+}
+
+/* Buttons */
+.dashboard-btn {
+  height: 42px;
+  font-size: 16px;
+  font-weight: 500;
+  padding: 0 24px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dashboard-btn-primary {
+  background: #1a237e;
+  border-color: #1a237e;
+  color: white;
+}
+
+.dashboard-btn-primary:hover {
+  background: #283593;
+  border-color: #283593;
+  color: white;
+}
+
+/* Typography */
+.dashboard-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1a237e;
+  margin-bottom: 25px;
+}
+
+.dashboard-subtitle {
+  font-size: 18px;
+  font-weight: 500;
+  color: #3949ab;
+  margin: 20px 0 15px;
+}
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .dashboard-container {
+    padding: 15px;
+  }
+  
+  .stat-card .ant-statistic-title {
+    font-size: 16px !important;
+  }
+  
+  .stat-card .ant-statistic-content-value {
+    font-size: 24px !important;
+  }
+  
+  .dashboard-title {
+    font-size: 20px;
+  }
+}
