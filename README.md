@@ -1,23 +1,62 @@
-# Getting Started with Create React App
+# Tableau de Bord de Gestion de Maternelle
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Application de gestion complète pour les écoles maternelles avec suivi des enfants, des enseignants et des activités.
 
-## Available Scripts
+## 🚀 Déploiement sur Vercel
 
-In the project directory, you can run:
+### Prérequis
+- Compte [Vercel](https://vercel.com)
+- Compte [GitHub](https://github.com)
+- Node.js 14+ et npm installés localement
 
-### `npm start`
+### Variables d'Environnement
+Créez un fichier `.env.local` à la racine du projet avec les variables suivantes :
+```
+REACT_APP_API_URL=https://votre-backend.vercel.app/api
+# Autres variables d'environnement si nécessaire
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+### Déploiement Automatique
+1. Poussez votre code sur GitHub
+2. Connectez-vous à [Vercel](https://vercel.com)
+3. Cliquez sur "New Project"
+4. Importez votre dépôt GitHub
+5. Configurez les paramètres :
+   - Framework: Create React App
+   - Build Command: `npm run build`
+   - Output Directory: `build`
+   - Install Command: `npm install`
+6. Ajoutez les variables d'environnement
+7. Cliquez sur "Deploy"
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 📦 Installation en Local
 
-### `npm test`
+1. Clonez le dépôt :
+   ```bash
+   git clone https://github.com/votre-utilisateur/kindergarten-frontend.git
+   cd kindergarten-frontend
+   ```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+2. Installez les dépendances :
+   ```bash
+   npm install
+   ```
+
+3. Lancez l'application en mode développement :
+   ```bash
+   npm start
+   ```
+   L'application sera disponible sur [http://localhost:3000](http://localhost:3000)
+
+## 🛠 Commandes Utiles
+
+- `npm start` - Lance l'application en mode développement
+- `npm run build` - Construit l'application pour la production
+- `npm test` - Lance les tests
+- `npm run eject` - Sort de Create React App (irréversible)
+
+## 🌍 Internationalisation
+L'application prend en charge plusieurs langues via i18n. Les fichiers de traduction sont dans le dossier `public/locales`.
 
 ### `npm run build`
 
