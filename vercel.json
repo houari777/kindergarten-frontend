@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "installCommand": "npm install --legacy-peer-deps --prefer-offline",
+  "installCommand": "npm install --legacy-peer-deps --force --prefer-offline",
   "buildCommand": "npm run build",
   "builds": [
     {
