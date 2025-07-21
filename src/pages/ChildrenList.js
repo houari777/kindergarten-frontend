@@ -17,7 +17,9 @@ import {
   Upload,
   Row,
   Col,
-  Badge
+  Badge,
+  Dropdown,
+  Menu
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -27,8 +29,13 @@ import {
   UserOutlined,
   UploadOutlined,
   FileTextOutlined,
-  MessageOutlined
+  MessageOutlined,
+  FilePdfOutlined,
+  DownOutlined
 } from '@ant-design/icons';
+// Import jsPDF and autoTable with proper initialization
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -63,6 +70,8 @@ function ChildrenList() {
   
   // Data state
   const [children, setChildren] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [allTeachers, setAllTeachers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -125,8 +134,50 @@ function ChildrenList() {
     }
   };
 
+  const fetchClasses = async () => {
+    try {
+      const res = await fetch('http://localhost:5001/api/classes', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setClasses(data.classes || []);
+      }
+    } catch (err) {
+      console.error('Error fetching classes:', err);
+    }
+  };
+
+  const fetchTeachers = async () => {
+    try {
+      const res = await fetch('http://localhost:5001/api/teachers', {
+        headers: { Authorization: 'Bearer ' + token }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAllTeachers(data.teachers || []);
+      }
+    } catch (err) {
+      console.error('Error fetching teachers:', err);
+    }
+  };
+
   useEffect(() => {
-    fetchChildren();
+    const loadData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchChildren(),
+          fetchClasses(),
+          fetchTeachers()
+        ]);
+      } catch (err) {
+        console.error('Error loading data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadData();
     // eslint-disable-next-line
   }, []);
 
@@ -264,6 +315,90 @@ function ChildrenList() {
     return matchesName && matchesClass && matchesAge && matchesParent && matchesHealth;
   });
 
+  const exportToPDF = () => {
+    try {
+      // Create a new jsPDF instance
+      const doc = new jsPDF();
+      
+      // Set document title
+      doc.setFontSize(18);
+      doc.text('تقرير الأطفال', 14, 22);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      
+      // Prepare data for the table
+      const tableColumn = ['الاسم', 'العمر', 'الصف', 'المعلم', 'الحالة الصحية'];
+      const tableRows = [];
+      
+      // Add data to table rows
+      filteredChildren.forEach(child => {
+        const childClass = classes && child.classId ? classes.find(cls => cls.id === child.classId) : null;
+        const teacherName = childClass && Array.isArray(childClass.teacherIds) && childClass.teacherIds.length > 0
+          ? (allTeachers && allTeachers.length > 0
+            ? (() => {
+                const teacher = allTeachers.find(t => t.id === childClass.teacherIds[0]);
+                return teacher ? teacher.name : childClass.teacherIds[0];
+              })()
+            : childClass.teacherIds[0])
+          : '-';
+          
+        const rowData = [
+          child.name || '-',
+          child.age || '-',
+          childClass ? childClass.name : '-',
+          teacherName,
+          child.health || '-'
+        ];
+        tableRows.push(rowData);
+      });
+      
+      // Add table using autoTable plugin - using jsPDF's autoTable method
+      doc.autoTable({
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        styles: { 
+          font: 'tajawal',
+          fontStyle: 'normal',
+          fontSize: 10,
+          cellPadding: 3,
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+          halign: 'right',
+          rtl: true
+        },
+        headStyles: {
+          fillColor: [25, 118, 210],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          halign: 'right'
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245]
+        },
+        margin: { top: 30 }
+      });
+      
+      // Add footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text(
+          `صفحة ${i} من ${pageCount}`,
+          doc.internal.pageSize.width - 30,
+          doc.internal.pageSize.height - 10
+        );
+      }
+      
+      // Save the PDF
+      doc.save('children_report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      message.error('فشل في إنشاء ملف PDF. الرجاء المحاولة مرة أخرى.');
+    }
+  };
+
   const handleSendMessageToParent = async (child) => {
     const parentId = child.parentIds[0]; // Assuming the first parent is the primary guardian
     if (!parentId) {
@@ -319,16 +454,74 @@ function ChildrenList() {
     <div style={{ maxWidth: '100%', margin: '40px auto', padding: 24, fontFamily: 'Tajawal, Arial, sans-serif' }}>
       <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: i18n.language === 'ar' ? 'right' : 'left', fontFamily: 'Tajawal, Arial, sans-serif' }}>{t('Children Management')}</h2>
       {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start' }}>
-        <Input placeholder={t('Search by Name')} value={searchName} onChange={e => setSearchName(e.target.value)} style={{ width: 160 }} />
-        <Input placeholder={t('Search by Class')} value={searchClass} onChange={e => setSearchClass(e.target.value)} style={{ width: 120 }} />
-        <Input placeholder={t('Age')} value={searchAge} onChange={e => setSearchAge(e.target.value)} style={{ width: 80 }} />
-        <Input placeholder={t('Parent')} value={searchParent} onChange={e => setSearchParent(e.target.value)} style={{ width: 140 }} />
-        <Input placeholder={t('Health Status')} value={searchHealth} onChange={e => setSearchHealth(e.target.value)} style={{ width: 120 }} />
-        <Button type="primary" onClick={fetchChildren}>{t('Search')}</Button>
-        <Button onClick={() => { setSearchName(''); setSearchClass(''); setSearchAge(''); setSearchParent(''); setSearchHealth(''); fetchChildren(); }}>{t('Reset')}</Button>
-        <Button type="primary" style={{ marginLeft: 'auto' }} onClick={() => setShowAdd(true)}>{t('Add Child')}</Button>
+      
+      {/* Search and Filter Section */}
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Input 
+            placeholder={t('Search by Name')} 
+            value={searchName} 
+            onChange={e => setSearchName(e.target.value)} 
+            style={{ width: 160 }} 
+          />
+          <Input 
+            placeholder={t('Search by Class')} 
+            value={searchClass} 
+            onChange={e => setSearchClass(e.target.value)} 
+            style={{ width: 120 }} 
+          />
+          <Input 
+            placeholder={t('Age')} 
+            value={searchAge} 
+            onChange={e => setSearchAge(e.target.value)} 
+            style={{ width: 80 }} 
+          />
+          <Input 
+            placeholder={t('Parent')} 
+            value={searchParent} 
+            onChange={e => setSearchParent(e.target.value)} 
+            style={{ width: 140 }} 
+          />
+          <Input 
+            placeholder={t('Health Status')} 
+            value={searchHealth} 
+            onChange={e => setSearchHealth(e.target.value)} 
+            style={{ width: 120 }} 
+          />
+          <Button type="primary" onClick={fetchChildren}>{t('Search')}</Button>
+          <Button onClick={() => { 
+            setSearchName(''); 
+            setSearchClass(''); 
+            setSearchAge(''); 
+            setSearchParent(''); 
+            setSearchHealth(''); 
+            fetchChildren(); 
+          }}>
+            {t('Reset')}
+          </Button>
+        </div>
+        <div>
+          <Dropdown
+            overlay={
+              <Menu>
+                <Menu.Item key="pdf" icon={<FilePdfOutlined />} onClick={exportToPDF}>
+                  {t('Export as PDF')}
+                </Menu.Item>
+              </Menu>
+            }
+            trigger={['click']}
+          >
+            <Button type="primary" style={{ marginRight: 8 }}>
+              {t('Export')} <DownOutlined />
+            </Button>
+          </Dropdown>
+          <Button type="primary" onClick={() => setShowAdd(true)}>
+            {t('Add Child')}
+          </Button>
+        </div>
       </div>
+
+      {/* Add Child Modal */}
       {showAdd && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: 32, borderRadius: 8, minWidth: 350, position: 'relative' }}>
@@ -500,15 +693,25 @@ function ChildrenList() {
               </tr>
             </thead>
             <tbody>
-              {filteredChildren.map(child => (
+              {filteredChildren.map(child => {
+                const childClass = classes && child.classId ? classes.find(cls => cls.id === child.classId) : null;
+                const teacherName = childClass && Array.isArray(childClass.teacherIds) && childClass.teacherIds.length > 0
+                  ? (allTeachers && allTeachers.length > 0
+                    ? (() => {
+                        const teacher = allTeachers.find(t => t.id === childClass.teacherIds[0]);
+                        return teacher ? teacher.name : childClass.teacherIds[0];
+                      })()
+                    : childClass.teacherIds[0])
+                  : '-';
+                return (
                 <tr key={child.id} style={{ borderBottom: '1px solid #e3eaf2' }}>
                   <td style={{ textAlign: 'center', padding: 8 }}>{child.image ? <img src={child.image} alt={t('Child Image')} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 1px 4px #b0bec5' }} /> : '-'}</td>
                   <td style={{ textAlign: 'center', padding: 8 }}>{child.name}</td>
                   <td style={{ textAlign: 'center', padding: 8 }}>{child.age}</td>
                   <td style={{ textAlign: 'center', padding: 8 }}>
-                    {child.classId ? <Badge color={child.classId === 'A' ? 'blue' : child.classId === 'B' ? 'orange' : 'green'} text={child.classId} /> : '-'}
+                      {childClass ? <Badge color={childClass.id === 'A' ? 'blue' : childClass.id === 'B' ? 'orange' : 'green'} text={childClass.name} /> : '-'}
                   </td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{child.parentNames?.join(', ')}</td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>{teacherName}</td>
                   <td style={{ textAlign: 'center', padding: 8 }}>
                     {child.health ? <Badge color={child.health === 'سليم' || child.health === 'صحي' ? 'green' : 'orange'} text={child.health} /> : '-'}
                   </td>
@@ -553,7 +756,8 @@ function ChildrenList() {
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

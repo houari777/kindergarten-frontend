@@ -12,6 +12,8 @@ import ChildReports from './pages/ChildReports';
 import Footer from './components/Footer';
 import Bills from './pages/Bills';
 import Notifications from './pages/Notifications';
+import TeachersList from './pages/TeachersList';
+import Unauthorized from './pages/Unauthorized';
 
 function App() {
   return (
@@ -20,19 +22,71 @@ function App() {
         <Navbar />
         <div style={{ flex: 1 }}>
           <Routes>
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
-            {/* لاحقًا: صفحات أخرى */}
-            <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/children" element={<ProtectedRoute><ChildrenList /></ProtectedRoute>} />
-            <Route path="/users" element={<ProtectedRoute><UsersList /></ProtectedRoute>} />
-            <Route path="/classes" element={<ProtectedRoute><ClassesList /></ProtectedRoute>} />
-            <Route path="/bills" element={<ProtectedRoute><Bills /></ProtectedRoute>} />
-            <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
-            <Route path="/reports/:childId" element={<ProtectedRoute><ChildReports /></ProtectedRoute>} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
+            
+            {/* Protected routes with role-based access */}
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
+            
+            {/* Admin-only routes */}
+            <Route path="/users" element={
+              <ProtectedRoute requiredRole="admin">
+                <UsersList />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/teachers" element={
+              <ProtectedRoute requiredRole="admin">
+                <TeachersList />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/classes" element={
+              <ProtectedRoute requiredRole="admin">
+                <ClassesList />
+              </ProtectedRoute>
+            } />
+            
+            {/* Shared routes for admin and teachers */}
+            <Route path="/children" element={
+              <ProtectedRoute requiredRole={["admin", "teacher"]}>
+                <ChildrenList />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/reports/:childId" element={
+              <ProtectedRoute requiredRole={["admin", "teacher"]}>
+                <ChildReports />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/bills" element={
+              <ProtectedRoute requiredRole={["admin", "teacher"]}>
+                <Bills />
+              </ProtectedRoute>
+            } />
+            
+            <Route path="/notifications" element={
+              <ProtectedRoute requiredRole={["admin", "teacher"]}>
+                <Notifications />
+              </ProtectedRoute>
+            } />
+            
+            {/* Catch-all route */}
+            <Route path="*" element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } />
           </Routes>
         </div>
         <Footer />
-    </div>
+      </div>
     </Router>
   );
 }

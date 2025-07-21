@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { useTranslation } from 'react-i18next';
+
+// Import our Arabic PDF utility
+import { loadFonts } from '../utils/arabicFonts';
 
 function ChildReports() {
   const { t, i18n } = useTranslation();
@@ -22,6 +23,9 @@ function ChildReports() {
   const [editLoading, setEditLoading] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [attestation, setAttestation] = useState(null);
+  const [attestationLoading, setAttestationLoading] = useState(false);
+  const [attestationError, setAttestationError] = useState('');
 
   const token = localStorage.getItem('token');
 
@@ -29,7 +33,7 @@ function ChildReports() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`http://localhost:5000/api/reports?childId=${childId}`, { headers: { Authorization: 'Bearer ' + token } });
+      const res = await fetch(`http://localhost:5001/api/reports/${childId}`, { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
       if (data.success) {
         setReports(data.reports);
@@ -43,6 +47,24 @@ function ChildReports() {
     }
   };
 
+  const fetchAttestation = async () => {
+    setAttestationLoading(true);
+    setAttestationError('');
+    try {
+      const res = await fetch(`http://localhost:5001/api/attestation/${childId}`, { headers: { Authorization: 'Bearer ' + token } });
+      const data = await res.json();
+      if (data.success) {
+        setAttestation(data.attestation);
+      } else {
+        setAttestationError(data.message || 'Erreur attestation');
+      }
+    } catch (err) {
+      setAttestationError('Network error');
+    } finally {
+      setAttestationLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchReports();
     // eslint-disable-next-line
@@ -53,7 +75,7 @@ function ChildReports() {
     setAddError('');
     setAddLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/reports', {
+      const res = await fetch('http://localhost:5001/api/reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ ...newReport, childId })
@@ -79,7 +101,7 @@ function ChildReports() {
     setEditError('');
     setEditLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/reports/${editReport.id}`, {
+      const res = await fetch(`http://localhost:5001/api/reports/${editReport.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ date: editReport.date, type: editReport.type, content: editReport.content })
@@ -104,7 +126,7 @@ function ChildReports() {
     setDeleteLoading(true);
     setSuccessMsg('');
     try {
-      const res = await fetch(`http://localhost:5000/api/reports/${id}`, {
+      const res = await fetch(`http://localhost:5001/api/reports/${id}`, {
         method: 'DELETE',
         headers: { Authorization: 'Bearer ' + token }
       });
@@ -118,7 +140,7 @@ function ChildReports() {
     setDeleteLoading(false);
   };
 
-  // تصدير إلى Excel
+  // Export to Excel
   const exportToExcel = () => {
     const exportData = reports.map(rep => ({
       التاريخ: rep.date,
@@ -131,26 +153,155 @@ function ChildReports() {
     XLSX.writeFile(wb, 'child_reports.xlsx');
   };
 
-  // تصدير إلى PDF
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    const exportData = reports.map(rep => [
-      rep.date,
-      rep.type,
-      rep.content,
-    ]);
-    doc.autoTable({
-      head: [[
-        t('Date'),
-        t('Type'),
-        t('Content'),
-      ]],
-      body: exportData,
-      styles: { font: 'arabic', fontStyle: 'normal', halign: 'right' },
-      headStyles: { fillColor: [25, 118, 210] },
-      margin: { right: 10, left: 10 },
-    });
-    doc.save('child_reports.pdf');
+  // PDF export with Arabic support
+  const exportToPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Get the pdfmake instance
+      const pdfMake = window.pdfMake;
+      if (!pdfMake) {
+        throw new Error('PDF library not loaded');
+      }
+      
+      try {
+        // Load Arabic fonts
+        const fontsLoaded = await loadFonts();
+        if (!fontsLoaded) {
+          throw new Error('Failed to load Arabic fonts');
+        }
+      } catch (fontError) {
+        console.error('Font loading error:', fontError);
+        // Continue with default fonts if Arabic font loading fails
+        console.warn('Falling back to default fonts');
+      }
+      
+      // Format date to use Western digits
+      const formatDate = (date) => {
+        const d = new Date(date);
+        return d.toLocaleDateString('fr-FR', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      };
+
+      // Prepare table data
+      const tableBody = [
+        // Table header
+        [
+          { text: '\u200F' + 'التاريخ', style: 'tableHeader' },
+          { text: '\u200F' + 'التقرير نوع', style: 'tableHeader' }, // Inversé manuellement
+          { text: '\u200F' + 'المحتوى', style: 'tableHeader' }
+        ],
+        // Table rows with formatted dates
+        ...reports.map(report => ([ 
+          report.date ? formatDate(report.date) : '-',
+          report.type ? report.type.split(' ').reverse().join(' ') : '-',
+          report.content ? report.content.split(' ').reverse().join(' ') : '-'
+        ]))
+      ];
+
+      // Document definition with RTL support
+      const docDefinition = {
+        pageOrientation: 'portrait',
+        pageSize: 'A4',
+        defaultStyle: {
+          font: 'Amiri',
+          alignment: 'right',
+          fontSize: 11,
+          lineHeight: 1.5,
+          characterSpacing: 0,
+          unbreakable: true
+        },
+        // Alignement global à droite
+        pageMargins: [40, 60, 40, 60],
+        // Forcer la direction RTL pour tout le document
+        _direction: 'rtl',
+        content: [
+          { 
+            text: '\u200F' + 'الطفل أنشطة تقرير', // Inversé manuellement pour l'ordre correct
+            style: 'header',
+            alignment: 'right', // Alignement à droite pour le titre
+            margin: [0, 0, 0, 10],
+            unbreakable: true,
+            bold: true,
+            fontSize: 16
+          },
+          { 
+            text: '\u200F' + `:${formatDate(new Date())} التصدير تاريخ` + '\u200F', // Inversé manuellement pour l'ordre correct // RLM at the beginning
+            style: 'subheader',
+            alignment: 'right',
+            margin: [0, 0, 0, 20],
+            unbreakable: true
+          },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['20%', '20%', '60%'],
+              body: tableBody,
+              // Configuration pour RTL
+              layout: {
+                hLineWidth: function(i, node) { return 0.5; },
+                vLineWidth: function(i, node) { return 0.5; },
+                hLineColor: '#ddd',
+                vLineColor: '#ddd',
+                fillColor: function(rowIndex) { 
+                  return rowIndex % 2 === 0 ? '#f9f9f9' : null; 
+                },
+                // Forcer l'alignement à droite pour toutes les cellules
+                cellPadding: 5,
+                // Configuration spécifique pour RTL
+                defaultCell: {
+                  alignment: 'right'
+                }
+              },
+              // Forcer la direction RTL
+              _direction: 'rtl',
+              // Configuration du style du tableau
+              fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f5f5f5' : null,
+              hLineWidth: () => 0.5,
+              vLineWidth: () => 0.5,
+              hLineColor: () => '#cccccc',
+              vLineColor: () => '#cccccc',
+              paddingTop: () => 5,
+              paddingBottom: () => 5,
+              paddingLeft: () => 10,
+              paddingRight: () => 10
+            }
+          }
+        ],
+        styles: {
+          header: {
+            fontSize: 18,
+            bold: true
+          },
+          subheader: {
+            fontSize: 12
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 12,
+            color: 'white',
+            fillColor: '#1976d2',
+            alignment: 'center',
+            margin: [0, 5, 0, 5]
+          }
+        },
+        // Default styles are now defined at the top of the document definition
+        // Set default font family
+        defaultFont: 'Amiri'
+      };
+      
+      // Create and download PDF
+      pdfMake.createPdf(docDefinition).download('تقرير_الطفل.pdf');
+      
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      alert('حدث خطأ أثناء إنشاء ملف PDF. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (loading) return <div style={{ margin: 40 }}>{t('Loading', 'جاري التحميل...')}</div>;
@@ -161,7 +312,20 @@ function ChildReports() {
       <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
         <button onClick={exportToExcel}>{t('Export to Excel')}</button>
         <button onClick={exportToPDF}>{t('Export to PDF')}</button>
+        <button onClick={fetchAttestation}>Afficher l'attestation d'inscription</button>
       </div>
+      {attestationLoading && <div style={{ color: '#1976d2', marginBottom: 8 }}>Chargement de l'attestation...</div>}
+      {attestationError && <div style={{ color: 'red', marginBottom: 8 }}>{attestationError}</div>}
+      {attestation && (
+        <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+          <h3>Attestation d'inscription</h3>
+          <div><b>Nom de l'enfant :</b> {attestation.childName}</div>
+          <div><b>Classe :</b> {attestation.classId}</div>
+          <div><b>Parents :</b> {Array.isArray(attestation.parentIds) ? attestation.parentIds.join(', ') : attestation.parentIds}</div>
+          <div><b>Date d'inscription :</b> {attestation.inscriptionDate && attestation.inscriptionDate._seconds ? new Date(attestation.inscriptionDate._seconds * 1000).toLocaleDateString() : '-'}</div>
+          <div style={{ marginTop: 8 }}>{attestation.message}</div>
+        </div>
+      )}
       {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
       <button style={{ marginBottom: 16 }} onClick={() => setShowAdd(true)}>{t('Add Report')}</button>
       {showAdd && (

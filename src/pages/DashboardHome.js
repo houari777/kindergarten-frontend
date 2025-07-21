@@ -16,9 +16,9 @@ function DashboardHome() {
       setError('');
       try {
         const [childrenRes, parentsRes, staffRes] = await Promise.all([
-          fetch('http://localhost:5000/api/children', { headers: { Authorization: 'Bearer ' + token } }),
-          fetch('http://localhost:5000/api/users?role=parent', { headers: { Authorization: 'Bearer ' + token } }),
-          fetch('http://localhost:5000/api/users?role=teacher', { headers: { Authorization: 'Bearer ' + token } })
+          fetch('http://localhost:5001/api/children', { headers: { Authorization: 'Bearer ' + token } }),
+          fetch('http://localhost:5001/api/users?role=parent', { headers: { Authorization: 'Bearer ' + token } }),
+          fetch('http://localhost:5001/api/users?role=teacher', { headers: { Authorization: 'Bearer ' + token } })
         ]);
         const childrenData = await childrenRes.json();
         const parentsData = await parentsRes.json();

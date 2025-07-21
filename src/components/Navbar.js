@@ -39,6 +39,7 @@ function Navbar() {
       <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: 18 }}>{t('Dashboard')}</Link>
       <Link to="/children" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Children Management')}</Link>
       <Link to="/users" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Users Management')}</Link>
+      <Link to="/teachers" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Teachers', 'إدارة المعلمين')}</Link>
       <Link to="/classes" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Class', 'إدارة الفصول')}</Link>
       <Link to="/bills" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Bills')}</Link>
       <Link to="/notifications" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Notifications')}</Link>

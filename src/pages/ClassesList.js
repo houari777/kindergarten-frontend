@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
+import { Button, Modal, Checkbox, Spin, Select } from 'antd';
 
 function ClassesList() {
   const [classes, setClasses] = useState([]);
@@ -19,6 +19,13 @@ function ClassesList() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [allChildren, setAllChildren] = useState([]);
   const [allTeachers, setAllTeachers] = useState([]);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedChildren, setSelectedChildren] = useState([]);
+  const [selectedTeachers, setSelectedTeachers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [showClassDetails, setShowClassDetails] = useState(false);
+  const [classDetails, setClassDetails] = useState(null);
 
   const token = localStorage.getItem('token');
 
@@ -26,8 +33,9 @@ function ClassesList() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:5000/api/classes', { headers: { Authorization: 'Bearer ' + token } });
+      const res = await fetch('http://localhost:5001/api/classes', { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
+      console.log('CLASSES FETCHED:', data.classes); // DEBUG
       if (data.success) {
         setClasses(data.classes);
       } else {
@@ -45,7 +53,7 @@ function ClassesList() {
     setAddError('');
     setAddLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/classes', {
+      const res = await fetch('http://localhost:5001/api/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify(newClass)
@@ -71,7 +79,7 @@ function ClassesList() {
     setEditError('');
     setEditLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/classes/${editClass.id}`, {
+      const res = await fetch(`http://localhost:5001/api/classes/${editClass.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({
@@ -101,7 +109,7 @@ function ClassesList() {
     setDeleteLoading(true);
     setSuccessMsg('');
     try {
-      const res = await fetch(`http://localhost:5000/api/classes/${id}`, {
+      const res = await fetch(`http://localhost:5001/api/classes/${id}`, {
         method: 'DELETE',
         headers: { Authorization: 'Bearer ' + token }
       });
@@ -115,6 +123,40 @@ function ClassesList() {
     setDeleteLoading(false);
   };
 
+  const openMembersModal = (cls) => {
+    setSelectedClass(cls);
+    setSelectedChildren(cls.childrenIds || []);
+    setSelectedTeachers(cls.teacherIds || []);
+    setShowMembersModal(true);
+  };
+
+  const handleSaveMembers = async () => {
+    setMembersLoading(true);
+    try {
+      const res = await fetch(`http://localhost:5001/api/classes/${selectedClass.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+        body: JSON.stringify({
+          childrenIds: selectedChildren,
+          teacherIds: selectedTeachers
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setShowMembersModal(false);
+        setSelectedClass(null);
+        setSuccessMsg('تم تحديث أعضاء الفصل بنجاح');
+        fetchClasses();
+      }
+    } catch (err) {}
+    setMembersLoading(false);
+  };
+
+  const openClassDetails = (cls) => {
+    setClassDetails(cls);
+    setShowClassDetails(true);
+  };
+
   useEffect(() => {
     fetchClasses();
     // eslint-disable-next-line
@@ -125,8 +167,8 @@ function ClassesList() {
     const fetchOptions = async () => {
       try {
         const [childrenRes, teachersRes] = await Promise.all([
-          fetch('http://localhost:5000/api/children', { headers: { Authorization: 'Bearer ' + token } }),
-          fetch('http://localhost:5000/api/users?role=teacher', { headers: { Authorization: 'Bearer ' + token } })
+          fetch('http://localhost:5001/api/children', { headers: { Authorization: 'Bearer ' + token } }),
+          fetch('http://localhost:5001/api/users?role=teacher', { headers: { Authorization: 'Bearer ' + token } })
         ]);
         const childrenData = await childrenRes.json();
         const teachersData = await teachersRes.json();
@@ -215,12 +257,12 @@ function ClassesList() {
         <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(25, 118, 210, 0.07)', padding: 0, marginTop: 16 }}>
           <table style={{ minWidth: 1000, width: '100%', borderCollapse: 'collapse', fontSize: 16, fontFamily: 'Tajawal, Arial, sans-serif' }}>
             <thead>
-              <tr style={{ background: '#f5f5f5', fontWeight: 700, fontSize: 17 }}>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>اسم الفصل</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>الوصف</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>الأطفال</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>المعلمون</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>إجراءات</th>
+              <tr style={{ background: '#f5f5f5' }}>
+                <th>اسم الفصل</th>
+                <th>الوصف</th>
+                <th>عدد الأطفال</th>
+                <th>المعلم</th>
+                <th>إجراءات</th>
               </tr>
             </thead>
             <tbody>
@@ -228,17 +270,25 @@ function ClassesList() {
                 <tr key={cls.id} style={{ borderBottom: '1px solid #e3eaf2' }} className="custom-table-row">
                   <td style={{ textAlign: 'center', padding: 8 }}>{cls.name}</td>
                   <td style={{ textAlign: 'center', padding: 8 }}>{cls.description || '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.childrenIds && cls.childrenIds.length > 0 ? cls.childrenIds.map(cid => {
-                    const child = allChildren.find(c => c.id === cid);
-                    return child ? child.name : cid;
-                  }).join(', ') : '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.teacherIds && cls.teacherIds.length > 0 ? cls.teacherIds.map(tid => {
-                    const teacher = allTeachers.find(t => t.id === tid);
-                    return teacher ? teacher.name : tid;
-                  }).join(', ') : '-'}</td>
+                  <td style={{ textAlign: 'center', padding: 8 }}>{Array.isArray(cls.childrenIds) ? cls.childrenIds.length : (editClass && editClass.id === cls.id && Array.isArray(editClass.childrenIds) ? editClass.childrenIds.length : 0)}</td>
+                  <td style={{ textAlign: 'center', padding: 8 }}>
+                    {Array.isArray(cls.teacherIds) && cls.teacherIds.length > 0
+                      ? (() => {
+                          const teacher = allTeachers.find(t => t.id === cls.teacherIds[0]);
+                          return teacher ? teacher.name : cls.teacherIds[0];
+                        })()
+                      : (editClass && editClass.id === cls.id && Array.isArray(editClass.teacherIds) && editClass.teacherIds.length > 0
+                        ? (() => {
+                            const teacher = allTeachers.find(t => t.id === editClass.teacherIds[0]);
+                            return teacher ? teacher.name : editClass.teacherIds[0];
+                          })()
+                        : '-')}
+                  </td>
                   <td style={{ textAlign: 'center', padding: 8 }}>
                     <Button type="link" icon={<EditOutlined />} style={{ color: '#1976d2', fontWeight: 600 }} onClick={() => { setEditClass({ ...cls }); setShowEdit(true); }}>تعديل</Button>
                     <Button type="link" icon={<DeleteOutlined />} danger style={{ fontWeight: 600 }} onClick={() => setDeleteId(cls.id)}>حذف</Button>
+                    <Button type="link" style={{ color: '#388e3c', fontWeight: 600 }} onClick={() => openMembersModal(cls)}>إدارة الأعضاء</Button>
+                    <Button type="link" style={{ color: '#1976d2', fontWeight: 600 }} onClick={() => openClassDetails(cls)}>تفاصيل</Button>
                   </td>
                 </tr>
               ))}
@@ -253,6 +303,84 @@ function ClassesList() {
   transition: background 0.2s;
 }
 `}</style>
+      {/* Modal pour gérer les membres de la classe */}
+      <Modal
+        title={`إدارة أعضاء الفصل: ${selectedClass?.name || ''}`}
+        open={showMembersModal}
+        onCancel={() => setShowMembersModal(false)}
+        onOk={handleSaveMembers}
+        okText="حفظ"
+        cancelText="إلغاء"
+        confirmLoading={membersLoading}
+      >
+        <Spin spinning={membersLoading}>
+          <div style={{ marginBottom: 16 }}>
+            <label>الأطفال في الفصل:</label>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              value={selectedChildren}
+              onChange={setSelectedChildren}
+              placeholder="اختر الأطفال..."
+              optionFilterProp="children"
+              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+            >
+              {allChildren.map(child => (
+                <Select.Option key={child.id} value={child.id}>{child.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label>المعلم في الفصل:</label>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              value={selectedTeachers[0] || undefined}
+              onChange={val => setSelectedTeachers(val ? [val] : [])}
+              placeholder="اختر المعلم..."
+              optionFilterProp="children"
+              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              allowClear
+            >
+              {allTeachers.map(teacher => (
+                <Select.Option key={teacher.id} value={teacher.id}>{teacher.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+        </Spin>
+      </Modal>
+      {/* Modal de détails de la classe */}
+      <Modal
+        title={`تفاصيل الفصل: ${classDetails?.name || ''}`}
+        open={showClassDetails}
+        onCancel={() => setShowClassDetails(false)}
+        footer={null}
+      >
+        <div style={{ marginBottom: 12 }}><b>عدد الأطفال :</b> {Array.isArray(classDetails?.childrenIds) ? classDetails.childrenIds.length : (editClass && editClass.id === classDetails?.id && Array.isArray(editClass.childrenIds) ? editClass.childrenIds.length : 0)}</div>
+        <div style={{ marginBottom: 12 }}><b>المعلم :</b> {Array.isArray(classDetails?.teacherIds) && classDetails.teacherIds.length > 0 ? (() => {
+          const teacher = allTeachers.find(t => t.id === classDetails.teacherIds[0]);
+          return teacher ? teacher.name : classDetails.teacherIds[0];
+        })() : (editClass && editClass.id === classDetails?.id && Array.isArray(editClass.teacherIds) && editClass.teacherIds.length > 0
+          ? (() => {
+              const teacher = allTeachers.find(t => t.id === editClass.teacherIds[0]);
+              return teacher ? teacher.name : editClass.teacherIds[0];
+            })()
+          : '-')}</div>
+        <div style={{ marginBottom: 8 }}><b>قائمة الأطفال :</b></div>
+        <ul style={{ paddingLeft: 20 }}>
+          {Array.isArray(classDetails?.childrenIds) && classDetails.childrenIds.length > 0 ?
+            classDetails.childrenIds.map(cid => {
+              const child = allChildren.find(c => c.id === cid);
+              return <li key={cid}>{child ? child.name : cid}</li>;
+            }) : (editClass && editClass.id === classDetails?.id && Array.isArray(editClass.childrenIds) && editClass.childrenIds.length > 0
+              ? editClass.childrenIds.map(cid => {
+                  const child = allChildren.find(c => c.id === cid);
+                  return <li key={cid}>{child ? child.name : cid}</li>;
+                })
+              : <li>-</li>)}
+        </ul>
+      </Modal>
     </div>
   );
 }
