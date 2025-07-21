@@ -1,42 +1,29 @@
 {
   "version": 2,
-  "installCommand": "npm install --legacy-peer-deps --force --prefer-offline",
-  "buildCommand": "npm run build",
-  "framework": "create-react-app",
-  "outputDirectory": "build",
   "builds": [
     {
       "src": "package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "build"
+        "distDir": "build",
+        "installCommand": "npm install --legacy-peer-deps --force --prefer-offline",
+        "buildCommand": "npm run build"
       }
     }
   ],
   "routes": [
-    {
-      "src": "/static/(.*)",
-      "dest": "/static/$1"
-    },
-    {
-      "src": "/favicon.ico",
-      "dest": "/favicon.ico"
-    },
-    {
-      "src": "/logo192.png",
-      "dest": "/logo192.png"
-    },
-    {
-      "src": "/logo512.png",
-      "dest": "/logo512.png"
-    },
-    {
-      "src": "/manifest.json",
-      "dest": "/manifest.json"
-    },
-    {
-      "src": "^/(.*)",
-      "dest": "/index.html"
+    { "handle": "filesystem" },
+    { "src": "/static/(.*)", "dest": "/static/$1" },
+    { "src": "/favicon.ico", "dest": "/favicon.ico" },
+    { "src": "/logo192.png", "dest": "/logo192.png" },
+    { "src": "/logo512.png", "dest": "/logo512.png" },
+    { "src": "/manifest.json", "dest": "/manifest.json" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
+  "build": {
+    "env": {
+      "NODE_VERSION": "18.x"
     }
-  ]
+  },
+  "framework": "create-react-app"
 }
