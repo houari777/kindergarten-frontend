@@ -19,7 +19,7 @@ const corsOptions = {
     
     // List of allowed origins (add your frontend URLs here)
     const allowedOrigins = [
-      'http://localhost:5001/api/reportshttp://localhost:5001/api/reportshttp://localhost:3000',  // Dashboard frontend
+      'http://localhost:3000',  // Dashboard frontend
       'https://kindergarten-backend-s82q.onrender.com',
       'http://localhost:19006', // Expo web
       'exp://10.0.2.2:19000',   // Android emulator
@@ -757,37 +757,6 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-// تسجيل الدخول
-app.post('/api/auth/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ success: false, message: 'email and password are required.' });
-    }
-    const snapshot = await admin.firestore().collection('users').where('email', '==', email).get();
-    if (snapshot.empty) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
-    }
-    const user = snapshot.docs[0].data();
-    if (user.password !== password) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials.' });
-    }
-    // توليد JWT
-    const token = jwt.sign(
-      { 
-        email: user.email, 
-        role: user.role, 
-        name: user.name,
-        userId: snapshot.docs[0].id // Add user ID to the token
-      }, 
-      JWT_SECRET, 
-      { expiresIn: '7d' }
-    );
-    res.json({ success: true, token });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
 
 // ================== إندبوينتات الفواتير (bills) ==================
 
