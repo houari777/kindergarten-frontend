@@ -14,38 +14,36 @@ const app = express();
 // Configure CORS with specific options
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, postman)
-    if (!origin) return callback(null, true);
-    
-    // List of allowed origins (add your frontend URLs here)
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+
+    // List of allowed origins in production
     const allowedOrigins = [
-      'http://localhost:3000',  // Dashboard frontend
+      'http://localhost:3000',
+      'http://localhost:19006',
       'https://kindergarten-backend-s82q.onrender.com',
-      'http://localhost:19006', // Expo web
-      'exp://10.0.2.2:19000',   // Android emulator
-      'http://10.0.2.2:19006',  // Android emulator web
-      'exp://127.0.0.1:19000',  // iOS simulator
-      'http://127.0.0.1:19006', // iOS simulator web
-      'http://10.8.0.121:8081', // Expo development server
-      /^https?:\/\/localhost(:[0-9]+)?$/, // Any localhost with any port
-      /^https?:\/\/10\.0\.2\.2(:[0-9]+)?$/, // Android emulator with any port
-      /^https?:\/\/10\.8\.0\.121(:[0-9]+)?$/, // Development server with any port
+      /\.onrender\.com$/, // Allow all Render subdomains
+      /^https?:\/\/localhost(:\d+)?$/, // Localhost with any port
+      /^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/, // IP addresses with any port
     ];
 
-    if (allowedOrigins.some(allowedOrigin => 
-      typeof allowedOrigin === 'string' 
-        ? origin === allowedOrigin 
-        : allowedOrigin.test(origin)
+    if (!origin || allowedOrigins.some(pattern =>
+        typeof pattern === 'string'
+            ? origin === pattern
+            : pattern.test(origin)
     )) {
       callback(null, true);
     } else {
+      console.warn(`CORS blocked: ${origin} is not allowed`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
-  optionsSuccessStatus: 200
+  optionsSuccessStatus: 204
 };
 
 // Apply CORS to all routes
@@ -66,22 +64,43 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Add CORS headers to all responses
 app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  }
+
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
+
+  next();
+});
+// Increase payload size limit
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  
+
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
-  
+
   next();
 });
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
