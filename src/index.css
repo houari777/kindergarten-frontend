@@ -1,0 +1,167 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap&size-adjust=150%');
+
+:root {
+  --font-size-base: 18px;
+  --font-size-lg: 1.5rem;
+  --font-size-xl: 2rem;
+  --spacing-unit: 1.5rem;
+  --border-radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Tajawal', Arial, sans-serif;
+  background: #f7f9fb;
+  color: #222;
+  margin: 0;
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  color: #1976d2;
+  margin: calc(var(--spacing-unit) * 1.5) 0 var(--spacing-unit) 0;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 2rem; }
+h3 { font-size: 1.75rem; }
+h4 { font-size: 1.5rem; }
+h5 { font-size: 1.25rem; }
+h6 { font-size: 1.1rem; }
+
+/* Layout and Spacing */
+.ant-layout {
+  min-height: 100vh;
+}
+
+.ant-layout-content {
+  padding: calc(var(--spacing-unit) * 2);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Tables */
+.ant-table {
+  background: #fff;
+  border-radius: var(--border-radius);
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.07);
+  font-size: 1.1rem;
+}
+
+.ant-table-thead > tr > th {
+  font-weight: 700 !important;
+  font-size: 1.1rem;
+  padding: 16px !important;
+}
+
+.ant-table-tbody > tr > td {
+  padding: 12px 16px !important;
+}
+
+/* Buttons */
+.ant-btn, button {
+  font-family: 'Tajawal', Arial, sans-serif;
+  border-radius: var(--border-radius) !important;
+  font-weight: 600;
+  font-size: 1.1rem;
+  height: auto;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ant-btn-lg {
+  font-size: 1.25rem;
+  padding: 12px 24px;
+}
+
+/* Forms */
+.ant-form-item-label > label {
+  font-size: 1.1rem;
+  height: auto;
+  margin-bottom: 8px;
+}
+
+.ant-input,
+.ant-select-selector,
+.ant-picker,
+.ant-input-number,
+.ant-input-password,
+.ant-select-single:not(.ant-select-customize-input) .ant-select-selector {
+  font-size: 1.1rem;
+  padding: 12px 16px !important;
+  height: auto !important;
+  border-radius: var(--border-radius) !important;
+}
+
+/* Cards */
+.ant-card {
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-unit);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.ant-card-head {
+  font-size: 1.25rem;
+  font-weight: 600;
+  min-height: 60px;
+}
+
+/* Navigation */
+nav {
+  box-shadow: 0 2px 8px rgba(25, 118, 210, 0.07);
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+  padding: 0 2rem;
+}
+
+/* Modals */
+.ant-modal-content {
+  border-radius: var(--border-radius);
+}
+
+.ant-modal-header {
+  border-radius: var(--border-radius) var(--border-radius) 0 0;
+  padding: 24px;
+}
+
+.ant-modal-body {
+  padding: 24px;
+  font-size: 1.1rem;
+}
+
+.ant-modal-footer {
+  padding: 16px 24px;
+  border-radius: 0 0 var(--border-radius) var(--border-radius);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: #e3eaf2;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b0bec5;
+  border-radius: 10px;
+}
+
+/* Utility Classes */
+.mb-3 { margin-bottom: var(--spacing-unit) !important; }
+.mb-4 { margin-bottom: calc(var(--spacing-unit) * 1.5) !important; }
+.mb-5 { margin-bottom: calc(var(--spacing-unit) * 2) !important; }
+
+.mt-3 { margin-top: var(--spacing-unit) !important; }
+.mt-4 { margin-top: calc(var(--spacing-unit) * 1.5) !important; }
+.mt-5 { margin-top: calc(var(--spacing-unit) * 2) !important; }
+
+.p-3 { padding: var(--spacing-unit) !important; }
+.p-4 { padding: calc(var(--spacing-unit) * 1.5) !important; }
+.p-5 { padding: calc(var(--spacing-unit) * 2) !important; }
