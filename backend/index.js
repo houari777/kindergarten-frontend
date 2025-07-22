@@ -20,6 +20,7 @@ const corsOptions = {
     // List of allowed origins (add your frontend URLs here)
     const allowedOrigins = [
       'http://localhost:5001/api/reportshttp://localhost:5001/api/reportshttp://localhost:3000',  // Dashboard frontend
+      'https://kindergarten-backend-s82q.onrender.com',
       'http://localhost:19006', // Expo web
       'exp://10.0.2.2:19000',   // Android emulator
       'http://10.0.2.2:19006',  // Android emulator web
@@ -86,7 +87,13 @@ const upload = multer({
 });
 
 // إعداد firebase-admin
-const serviceAccount = require('./serviceAccountKey.json');
+let serviceAccount;
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+} else {
+  serviceAccount = require('./serviceAccountKey.json');
+}
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
