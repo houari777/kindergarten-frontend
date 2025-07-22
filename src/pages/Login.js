@@ -12,16 +12,34 @@ function Login() {
     e.preventDefault();
     setError('');
     try {
-      const data = await api.post('/auth/login', { email, password }, null);
+      const response = await fetch('https://kindergarten-backend-s82q.onrender.com/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include', // Important for cookies
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Login failed');
+      }
+
       if (data.success) {
-        localStorage.setItem('token', data.token);
-        window.location.href = '/'; // Redirect to home page
+        // Store the token if it's in the response
+        if (data.token) {
+          localStorage.setItem('token', data.token);
+        }
+        // Redirect to home page
+        window.location.href = '/';
       } else {
         setError(data.message || 'Login failed');
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Network error');
+      setError(err.message || 'Network error. Please try again.');
     }
   };
 
