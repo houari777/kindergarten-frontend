@@ -7,6 +7,8 @@ const https = require('https');
 const multer = require('multer');
 const path = require('path');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'kindergarten_app_secure_jwt_secret_2023';
+
 const app = express();
 
 // Configure CORS with specific options
@@ -17,7 +19,7 @@ const corsOptions = {
     
     // List of allowed origins (add your frontend URLs here)
     const allowedOrigins = [
-      'http://localhost:3000',  // Dashboard frontend
+      'http://localhost:5001/api/reportshttp://localhost:5001/api/reportshttp://localhost:3000',  // Dashboard frontend
       'http://localhost:19006', // Expo web
       'exp://10.0.2.2:19000',   // Android emulator
       'http://10.0.2.2:19006',  // Android emulator web
@@ -104,26 +106,86 @@ app.get('/api/test-firestore', async (req, res) => {
   }
 });
 
+// Secure admin creation endpoint (temporary - remove after use)
+app.post('/api/create-admin', async (req, res) => {
+  try {
+    const { secret_key, email, password, name } = req.body;
+    
+    // Verify the secret key (change this to a strong secret in production)
+    if (secret_key !== 'kindergarten_admin_2023') {
+      return res.status(403).json({ success: false, message: 'Unauthorized' });
+    }
+
+    // Check if user already exists
+    const existingUser = await admin.firestore()
+      .collection('users')
+      .where('email', '==', email)
+      .get();
+
+    if (!existingUser.empty) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User already exists' 
+      });
+    }
+
+    // Create admin user
+    const newAdmin = {
+      name: name || 'Admin User',
+      email,
+      password, // In a real app, you should hash this password
+      role: 'admin',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+    };
+
+    await admin.firestore().collection('users').add(newAdmin);
+    
+    res.json({ 
+      success: true, 
+      message: 'Admin user created successfully',
+      user: { email, role: 'admin' }
+    });
+
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error creating admin user',
+      error: error.message 
+    });
+  }
+});
+
+
 // Authentication endpoints
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('Login attempt for email:', email);
     
     if (!email || !password) {
+      console.log('Missing email or password');
       return res.status(400).json({ 
         success: false, 
         message: 'البريد الإلكتروني وكلمة المرور مطلوبان' 
       });
     }
 
-    // Find user by email
+    // Normalize email to lowercase for case-insensitive comparison
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    console.log('Looking up user with email:', normalizedEmail);
+    
+    // Find user by email (case-insensitive)
     const snapshot = await admin.firestore()
       .collection('users')
-      .where('email', '==', email)
+      .where('email', '==', normalizedEmail)
       .limit(1)
       .get();
 
     if (snapshot.empty) {
+      console.log('No user found with email:', normalizedEmail);
       return res.status(401).json({ 
         success: false, 
         message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
@@ -132,9 +194,17 @@ app.post('/api/auth/login', async (req, res) => {
 
     const userDoc = snapshot.docs[0];
     const user = { id: userDoc.id, ...userDoc.data() };
+    
+    console.log('Found user:', { 
+      id: user.id, 
+      email: user.email,
+      role: user.role,
+      passwordLength: user.password ? user.password.length : 'none'
+    });
 
     // In a real app, verify password with bcrypt
-    if (user.password !== password) {
+    if (!user.password || user.password !== password) {
+      console.log('Password mismatch or missing password');
       return res.status(401).json({ 
         success: false, 
         message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
@@ -152,17 +222,18 @@ app.post('/api/auth/login', async (req, res) => {
     
     const token = jwt.sign(
       tokenPayload,
-      process.env.JWT_SECRET || 'your_jwt_secret',
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     // Remove sensitive data before sending response
-    delete user.password;
+    const userResponse = { ...user };
+    delete userResponse.password;
     
     res.json({ 
       success: true, 
       token,
-      user
+      user: userResponse
     });
 
   } catch (error) {
@@ -174,10 +245,109 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// Temporary endpoint to reset admin password (for testing only)
+app.post('/api/debug/reset-admin-password', async (req, res) => {
+  try {
+    const { email, newPassword } = req.body;
+    
+    if (!email || !newPassword) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Email and new password are required' 
+      });
+    }
+    
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+    
+    // Find user by email
+    const snapshot = await admin.firestore()
+      .collection('users')
+      .where('email', '==', normalizedEmail)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    const userDoc = snapshot.docs[0];
+    
+    // Update the password
+    await admin.firestore()
+      .collection('users')
+      .doc(userDoc.id)
+      .update({ 
+        password: newPassword,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp() 
+      });
+    
+    res.json({ 
+      success: true, 
+      message: 'Password updated successfully',
+      userId: userDoc.id
+    });
+    
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error resetting password',
+      error: error.message 
+    });
+  }
+});
+
+// Get current user's information
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    console.log('Fetching user data for:', req.user);
+    
+    // Get user data from Firestore
+    const userDoc = await admin.firestore()
+      .collection('users')
+      .doc(req.user.userId)
+      .get();
+    
+    if (!userDoc.exists) {
+      console.log('User not found in database');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+    
+    const user = userDoc.data();
+    
+    // Remove sensitive data
+    delete user.password;
+    
+    res.json({ 
+      success: true, 
+      user: {
+        id: userDoc.id,
+        ...user
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error fetching user data',
+      error: error.message 
+    });
+  }
+});
+
 // User registration endpoint
 app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
   try {
-    const { name, email, phone, password, confirmPassword } = req.body;
+    console.log('Signup body:', req.body); // Ajout du log pour debug
+    const { name, email, phone, password, confirmPassword, role, fromTeachersPage } = req.body;
 
     // Validate required fields
     if (!name || !email || !phone || !password || !confirmPassword) {
@@ -198,7 +368,6 @@ app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
     const existingUser = await admin.firestore()
       .collection('users')
       .where('email', '==', email)
-      .limit(1)
       .get();
 
     if (!existingUser.empty) {
@@ -211,9 +380,25 @@ app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
     // Handle file upload if exists
     let idImageUrl = '';
     if (req.file) {
-      // In a real app, upload to Firebase Storage
-      // For now, we'll just store the file data in the document
       idImageUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    }
+
+    // Forcer le rôle teacher si la requête vient من الصفحة المدرسين
+    if (fromTeachersPage === true || fromTeachersPage === 'true') {
+      userRole = 'teacher';
+    } else if (role && role === 'admin' && req.headers.authorization) {
+      try {
+        const token = req.headers.authorization.split(' ')[1];
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded.role === 'admin') {
+          userRole = 'admin';
+          console.log('Admin authorization successful for user:', decoded.email);
+        }
+      } catch (e) {
+        console.error('Error verifying admin token:', e);
+      }
+    } else if (role && (role === 'teacher' || role === 'staff')) {
+      userRole = role;
     }
 
     // Create new user
@@ -223,7 +408,7 @@ app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
       phone,
       password, // In a real app, hash the password with bcrypt
       idImage: idImageUrl,
-      role: 'parent',
+      role: userRole,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp()
     };
@@ -233,8 +418,8 @@ app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
 
     // Generate JWT token
     const token = jwt.sign(
-      { userId, email, role: 'parent' },
-      process.env.JWT_SECRET || 'your_jwt_secret',
+      { userId, email, role: userRole },
+      JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -268,7 +453,7 @@ function authenticateToken(req, res, next) {
     });
   }
   
-  jwt.verify(token, process.env.JWT_SECRET || 'your_jwt_secret', (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) {
       return res.status(403).json({ 
         success: false, 
@@ -581,7 +766,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid credentials.' });
     }
     // توليد JWT
-    const token = jwt.sign({ email: user.email, role: user.role, name: user.name }, process.env.JWT_SECRET || 'secret', { expiresIn: '7d' });
+    const token = jwt.sign(
+      { 
+        email: user.email, 
+        role: user.role, 
+        name: user.name,
+        userId: snapshot.docs[0].id // Add user ID to the token
+      }, 
+      JWT_SECRET, 
+      { expiresIn: '7d' }
+    );
     res.json({ success: true, token });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -726,10 +920,195 @@ app.post('/api/notifications/send', authenticateToken, async (req, res) => {
   }
 });
 
+// === CLASSES API ===
+
+// Obtenir toutes les classes
+app.get('/api/classes', authenticateToken, async (req, res) => {
+  try {
+    const snapshot = await admin.firestore().collection('classes').get();
+    const classes = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        childrenIds: Array.isArray(data.childrenIds) ? data.childrenIds : [],
+        teacherIds: Array.isArray(data.teacherIds) ? data.teacherIds : [],
+      };
+    });
+    res.json({ success: true, classes });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Ajouter une classe
+app.post('/api/classes', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, teacher, childrenIds, teacherIds } = req.body;
+    if (!name) {
+      return res.status(400).json({ success: false, message: 'Le nom de la classe est requis.' });
+    }
+    const newClass = {
+      name,
+      description: description || '',
+      teacher: teacher || '',
+      childrenIds: Array.isArray(childrenIds) ? childrenIds : [],
+      teacherIds: Array.isArray(teacherIds) ? teacherIds : (teacher ? [teacher] : []),
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const docRef = await admin.firestore().collection('classes').add(newClass);
+    res.status(201).json({ success: true, id: docRef.id, class: { id: docRef.id, ...newClass } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Modifier une classe
+app.put('/api/classes/:id', authenticateToken, async (req, res) => {
+  try {
+    const { name, description, teacher, childrenIds, teacherIds } = req.body;
+    const updateData = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+    if (name !== undefined) updateData.name = name;
+    if (description !== undefined) updateData.description = description;
+    if (teacher !== undefined) updateData.teacher = teacher;
+    updateData.childrenIds = Array.isArray(childrenIds) ? childrenIds : [];
+    updateData.teacherIds = Array.isArray(teacherIds) ? teacherIds : (teacher ? [teacher] : []);
+    await admin.firestore().collection('classes').doc(req.params.id).update(updateData);
+
+    // Synchroniser la relation avec les enfants (champ classId)
+    if (Array.isArray(childrenIds)) {
+      // Retirer la classe des enfants qui n'en font plus partie
+      const allChildrenSnapshot = await admin.firestore().collection('children').where('classId', '==', req.params.id).get();
+      const allChildrenInClass = allChildrenSnapshot.docs.map(doc => doc.id);
+      const toRemove = allChildrenInClass.filter(id => !childrenIds.includes(id));
+      for (const childId of toRemove) {
+        await admin.firestore().collection('children').doc(childId).update({ classId: '' });
+      }
+      // Pour chaque enfant ajouté, s'assurer qu'il n'est dans aucune autre classe
+      for (const childId of childrenIds) {
+        // Chercher si l'enfant est déjà dans une autre classe
+        const childDoc = await admin.firestore().collection('children').doc(childId).get();
+        const childData = childDoc.data();
+        if (childData && childData.classId && childData.classId !== req.params.id) {
+          // Retirer l'enfant de l'ancienne classe (optionnel, ici on écrase simplement)
+        }
+        await admin.firestore().collection('children').doc(childId).update({ classId: req.params.id });
+      }
+    }
+
+    // Synchroniser la relation avec l'enseignant (un seul enseignant par classe)
+    if (Array.isArray(updateData.teacherIds) && updateData.teacherIds.length > 0) {
+      const teacherId = updateData.teacherIds[0];
+      // Retirer ce teacherId de toutes les autres classes
+      const otherClassesSnapshot = await admin.firestore().collection('classes').where('teacherIds', 'array-contains', teacherId).get();
+      for (const doc of otherClassesSnapshot.docs) {
+        if (doc.id !== req.params.id) {
+          const data = doc.data();
+          const newTeacherIds = Array.isArray(data.teacherIds) ? data.teacherIds.filter(id => id !== teacherId) : [];
+          await admin.firestore().collection('classes').doc(doc.id).update({ teacherIds: newTeacherIds });
+        }
+      }
+    }
+
+    res.json({ success: true, message: 'Classe mise à jour.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Supprimer une classe
+app.delete('/api/classes/:id', authenticateToken, async (req, res) => {
+  try {
+    await admin.firestore().collection('classes').doc(req.params.id).delete();
+    res.json({ success: true, message: 'Classe supprimée.' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Récupérer les rapports d’un enfant
+app.get('/api/reports', authenticateToken, async (req, res) => {
+  try {
+    const { childId } = req.query;
+    if (!childId) {
+      return res.status(400).json({ success: false, message: 'childId is required' });
+    }
+    const snapshot = await admin.firestore().collection('reports')
+      .where('childId', '==', childId)
+      .get();
+    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Récupérer les rapports d’un enfant par son id (route RESTful)
+app.get('/api/reports/:childId', authenticateToken, async (req, res) => {
+  try {
+    const childId = req.params.childId;
+    const snapshot = await admin.firestore().collection('reports')
+      .where('childId', '==', childId)
+      .get();
+    const reports = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    res.json({ success: true, reports });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Ajouter un rapport pour un enfant
+app.post('/api/reports', authenticateToken, async (req, res) => {
+  try {
+    const { childId, date, type, content } = req.body;
+    if (!childId || !date || !type || !content) {
+      return res.status(400).json({ success: false, message: 'Tous les champs sont requis.' });
+    }
+    const newReport = {
+      childId,
+      date,
+      type,
+      content,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const docRef = await admin.firestore().collection('reports').add(newReport);
+    res.status(201).json({ success: true, id: docRef.id, report: { id: docRef.id, ...newReport } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Générer une attestation d'inscription pour un enfant
+app.get('/api/attestation/:childId', authenticateToken, async (req, res) => {
+  try {
+    const childId = req.params.childId;
+    const doc = await admin.firestore().collection('children').doc(childId).get();
+    if (!doc.exists) {
+      return res.status(404).json({ success: false, message: 'Child not found' });
+    }
+    const child = doc.data();
+    // Exemple simple : retourner les infos de l'enfant sous forme d'attestation JSON
+    // (Pour un vrai PDF, il faudrait utiliser une lib comme pdfkit ou jsPDF côté serveur)
+    res.json({
+      success: true,
+      attestation: {
+        childName: child.name,
+        classId: child.classId,
+        parentIds: child.parentIds,
+        inscriptionDate: child.createdAt,
+        message: `Attestation d'inscription pour l'enfant ${child.name}`
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 const PORT = process.env.PORT || 5001;
 // Start server with enhanced error handling
 const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Kindergarten backend is running! Listening on port ${PORT}`);
   console.log(`Access the server at:`);
   console.log(`- http://localhost:${PORT}`);
   console.log(`- http://10.0.2.2:${PORT} (Android Emulator)`);
