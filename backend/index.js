@@ -7,28 +7,32 @@ const https = require('https');
 const multer = require('multer');
 const path = require('path');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'kindergarten_app_secure_jwt_secret_2023';
-
+// Initialize Express app
 const app = express();
 
-// Configure CORS with specific options
+// Middleware for parsing JSON and urlencoded data
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// CORS configuration
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:19006',
+  'https://kindergarten-frontend.onrender.com',
+  'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app',
+  'https://kindergarten-backend-s82q.onrender.com',
+  /^https?:\/\/kindergarten-[a-z0-9-]+\.vercel\.app$/,
+  /^https?:\/\/localhost(:\d+)?$/,
+];
+
 const corsOptions = {
   origin: function (origin, callback) {
-    // In development, allow all origins
+    // Allow all in development
     if (process.env.NODE_ENV !== 'production') {
       return callback(null, true);
     }
 
-    // In production, only allow specific origins
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://localhost:19006',
-      'https://kindergarten-frontend.onrender.com',
-      'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app',
-      /^https?:\/\/kindergarten-[a-z0-9-]+\.vercel\.app$/,
-      /^https?:\/\/localhost(:\d+)?$/,
-    ];
-
+    // Check if origin is in allowed list
     if (!origin || allowedOrigins.some(pattern => 
       typeof pattern === 'string' 
         ? origin === pattern 
@@ -41,7 +45,14 @@ const corsOptions = {
     }
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept',
+    'X-Access-Token',
+    'X-Refresh-Token'
+  ],
   credentials: true,
   optionsSuccessStatus: 204
 };
@@ -52,58 +63,13 @@ app.use(cors(corsOptions));
 // Handle preflight requests
 app.options('*', cors(corsOptions));
 
-// Log all incoming requests
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl} from ${req.ip} (${req.headers['user-agent']})`);
-  next();
-});
+// JWT Secret configuration
+const JWT_SECRET = process.env.JWT_SECRET || 'kindergarten_app_secure_jwt_secret_2023';
 
-// Increase payload size limit
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Add CORS headers to all responses
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin) {
-    res.header('Access-Control-Allow-Origin', origin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  }
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  next();
-});
-// Increase payload size limit
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Add CORS headers to all responses
-app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-
-  // Handle preflight requests
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  next();
-});
-
-// Configure multer for file uploads
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
-});
+// Verify JWT_SECRET is set
+if (!process.env.JWT_SECRET) {
+  console.warn('WARNING: JWT_SECRET is not set in environment variables. Using default secret.');
+}
 
 // إعداد firebase-admin
 let serviceAccount;
