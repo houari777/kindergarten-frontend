@@ -1,5 +1,5 @@
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app/api';
-const WS_BASE_URL = process.env.REACT_APP_WS_URL || 'wss://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://kindergarten-backend-s82q.onrender.com/api';
+const WS_BASE_URL = process.env.REACT_APP_WS_URL || 'wss://kindergarten-backend-s82q.onrender.com';
 
 // WebSocket connection
 let socket = null;

@@ -7,6 +7,51 @@ const https = require('https');
 const multer = require('multer');
 const path = require('path');
 
+// Initialize Firebase Admin SDK
+try {
+  const serviceAccount = {
+    "type": "service_account",
+    "project_id": "kindergarten-app-b106d",
+    "private_key_id": "c284f9411490d4a681837f517cbb9ec8209213dc",
+    "private_key": process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+    "client_email": "firebase-adminsdk-fbsvc@kindergarten-app-b106d.iam.gserviceaccount.com",
+    "client_id": "111678662405345395385",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40kindergarten-app-b106d.iam.gserviceaccount.com",
+    "universe_domain": "googleapis.com"
+  };
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://kindergarten-app-b106d.firebaseio.com"
+  });
+  
+  console.log('Firebase Admin SDK initialized successfully');
+} catch (error) {
+  console.error('Error initializing Firebase Admin SDK:', error);
+  process.exit(1);
+}
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage(); // Store files in memory
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+    files: 1
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, JPG, and PNG files are allowed.'));
+    }
+  }
+});
+
 // Initialize Express app
 const app = express();
 
@@ -19,25 +64,33 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:19006',
   'https://kindergarten-frontend.onrender.com',
-  'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app',
   'https://kindergarten-backend-s82q.onrender.com',
-  /^https?:\/\/kindergarten-[a-z0-9-]+\.vercel\.app$/,
+  /^https?:\/\/kindergarten-[a-z0-9-]+\.onrender\.com$/,
   /^https?:\/\/localhost(:\d+)?$/,
+  /^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/, // Allow IP addresses
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      console.log('Allowing request with no origin');
+      return callback(null, true);
+    }
+
     // Allow all in development
     if (process.env.NODE_ENV !== 'production') {
+      console.log(`Allowing all origins in development. Origin: ${origin}`);
       return callback(null, true);
     }
 
     // Check if origin is in allowed list
-    if (!origin || allowedOrigins.some(pattern => 
-      typeof pattern === 'string' 
-        ? origin === pattern 
-        : pattern.test(origin)
+    if (allowedOrigins.some(pattern =>
+        typeof pattern === 'string'
+            ? origin === pattern
+            : pattern.test(origin)
     )) {
+      console.log(`Allowing origin: ${origin}`);
       callback(null, true);
     } else {
       console.warn(`CORS blocked: ${origin} is not allowed`);
@@ -46,15 +99,15 @@ const corsOptions = {
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
-    'Content-Type', 
-    'Authorization', 
-    'X-Requested-With', 
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
     'Accept',
     'X-Access-Token',
     'X-Refresh-Token'
   ],
   credentials: true,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 200
 };
 
 // Apply CORS to all routes
@@ -62,6 +115,42 @@ app.use(cors(corsOptions));
 
 // Handle preflight requests
 app.options('*', cors(corsOptions));
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, X-Access-Token, X-Refresh-Token');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  next();
+});
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.some(pattern => 
+    typeof pattern === 'string' 
+      ? origin === pattern 
+      : pattern.test(origin)
+  )) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Handle preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 // JWT Secret configuration
 const JWT_SECRET = process.env.JWT_SECRET || 'kindergarten_app_secure_jwt_secret_2023';
@@ -152,87 +241,112 @@ app.post('/api/create-admin', async (req, res) => {
 
 // Authentication endpoints
 app.post('/api/auth/login', async (req, res) => {
+  console.log('Login request received:', {
+    headers: req.headers,
+    body: {
+      ...req.body,
+      password: req.body.password ? '[REDACTED]' : 'undefined'
+    }
+  });
+
   try {
     const { email, password } = req.body;
-    console.log('Login attempt for email:', email);
     
     if (!email || !password) {
       console.log('Missing email or password');
       return res.status(400).json({ 
         success: false, 
-        message: 'البريد الإلكتروني وكلمة المرور مطلوبان' 
+        message: 'Email and password are required' 
       });
     }
 
     // Normalize email to lowercase for case-insensitive comparison
-    const normalizedEmail = email.toLowerCase().trim();
-    
+    const normalizedEmail = email.toString().toLowerCase().trim();
     console.log('Looking up user with email:', normalizedEmail);
     
-    // Find user by email (case-insensitive)
-    const snapshot = await admin.firestore()
-      .collection('users')
-      .where('email', '==', normalizedEmail)
-      .limit(1)
-      .get();
+    try {
+      // Find user by email (case-insensitive)
+      const snapshot = await admin.firestore()
+        .collection('users')
+        .where('email', '==', normalizedEmail)
+        .limit(1)
+        .get();
 
-    if (snapshot.empty) {
-      console.log('No user found with email:', normalizedEmail);
-      return res.status(401).json({ 
+      if (snapshot.empty) {
+        console.log('No user found with email:', normalizedEmail);
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid email or password' 
+        });
+      }
+
+      const userDoc = snapshot.docs[0];
+      const user = { 
+        id: userDoc.id, 
+        ...userDoc.data(),
+        // Don't send password back to client
+        password: undefined
+      };
+
+      console.log('Found user:', {
+        id: user.id,
+        email: user.email,
+        role: user.role
+      });
+
+      // In a real app, verify password with bcrypt
+      if (!userDoc.data().password || userDoc.data().password !== password) {
+        console.log('Password mismatch or missing password');
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Invalid email or password' 
+        });
+      }
+
+      // Generate JWT token with user ID
+      const tokenPayload = { 
+        userId: userDoc.id,
+        email: user.email, 
+        role: user.role || 'parent' 
+      };
+
+      console.log('Generating token with payload:', tokenPayload);
+      
+      const token = jwt.sign(
+        tokenPayload,
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '7d' }
+      );
+
+      console.log('Login successful for user:', user.email);
+      
+      res.json({ 
+        success: true, 
+        message: 'Login successful',
+        token,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          name: user.name
+        }
+      });
+
+    } catch (dbError) {
+      console.error('Database error during login:', dbError);
+      res.status(500).json({ 
         success: false, 
-        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
+        message: 'Database error during login',
+        error: dbError.message 
       });
     }
-
-    const userDoc = snapshot.docs[0];
-    const user = { id: userDoc.id, ...userDoc.data() };
-    
-    console.log('Found user:', { 
-      id: user.id, 
-      email: user.email,
-      role: user.role,
-      passwordLength: user.password ? user.password.length : 'none'
-    });
-
-    // In a real app, verify password with bcrypt
-    if (!user.password || user.password !== password) {
-      console.log('Password mismatch or missing password');
-      return res.status(401).json({ 
-        success: false, 
-        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة' 
-      });
-    }
-
-    // Generate JWT token with user ID
-    const tokenPayload = { 
-      userId: userDoc.id, // Use the document ID as userId
-      email: user.email, 
-      role: user.role || 'parent' 
-    };
-    
-    console.log('Generating token with payload:', tokenPayload);
-    
-    const token = jwt.sign(
-      tokenPayload,
-      JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    // Remove sensitive data before sending response
-    const userResponse = { ...user };
-    delete userResponse.password;
-    
-    res.json({ 
-      success: true, 
-      token,
-      user: userResponse
-    });
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Unexpected error in login endpoint:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'حدث خطأ أثناء تسجيل الدخول' 
+      message: 'An unexpected error occurred during login',
+      error: error.message 
     });
   }
 });
