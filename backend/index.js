@@ -19,20 +19,20 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    // List of allowed origins in production
+    // In production, only allow specific origins
     const allowedOrigins = [
       'http://localhost:3000',
       'http://localhost:19006',
-      'https://kindergarten-backend-s82q.onrender.com',
-      /\.onrender\.com$/, // Allow all Render subdomains
-      /^https?:\/\/localhost(:\d+)?$/, // Localhost with any port
-      /^https?:\/\/\d+\.\d+\.\d+\.\d+(:\d+)?$/, // IP addresses with any port
+      'https://kindergarten-frontend.onrender.com',
+      'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app',
+      /^https?:\/\/kindergarten-[a-z0-9-]+\.vercel\.app$/,
+      /^https?:\/\/localhost(:\d+)?$/,
     ];
 
-    if (!origin || allowedOrigins.some(pattern =>
-        typeof pattern === 'string'
-            ? origin === pattern
-            : pattern.test(origin)
+    if (!origin || allowedOrigins.some(pattern => 
+      typeof pattern === 'string' 
+        ? origin === pattern 
+        : pattern.test(origin)
     )) {
       callback(null, true);
     } else {
@@ -409,7 +409,7 @@ app.post('/api/auth/signup', upload.single('idImage'), async (req, res) => {
       idImageUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
     }
 
-    // Forcer le rôle teacher si la requête vient من الصفحة المدرسين
+    // Forcer le rôle teacher si la requête vient de la page des enseignants
     if (fromTeachersPage === true || fromTeachersPage === 'true') {
       userRole = 'teacher';
     } else if (role && role === 'admin' && req.headers.authorization) {

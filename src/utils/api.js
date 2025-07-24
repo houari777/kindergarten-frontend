@@ -1,4 +1,34 @@
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://kindergarten-backend-s82q.onrender.com/api';
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'https://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app/api';
+const WS_BASE_URL = process.env.REACT_APP_WS_URL || 'wss://kindergarten-backend-r8q6eyn3c-houari777s-projects.vercel.app';
+
+// WebSocket connection
+let socket = null;
+
+export const connectWebSocket = (onMessage) => {
+  if (socket === null || socket.readyState === WebSocket.CLOSED) {
+    socket = new WebSocket(WS_BASE_URL);
+    
+    socket.onopen = () => {
+      console.log('WebSocket Connected');
+    };
+    
+    socket.onmessage = (event) => {
+      if (onMessage && typeof onMessage === 'function') {
+        onMessage(JSON.parse(event.data));
+      }
+    };
+    
+    socket.onerror = (error) => {
+      console.error('WebSocket Error:', error);
+    };
+    
+    socket.onclose = () => {
+      console.log('WebSocket Disconnected');
+    };
+  }
+  
+  return socket;
+};
 
 const api = {
   get: async (endpoint, token) => {
@@ -11,13 +41,14 @@ const api = {
     }
     
     const response = await fetch(`${API_BASE_URL}${endpoint}`, { 
+      method: 'GET',
       headers,
-      credentials: 'include', // Include credentials (cookies) with the request
-      mode: 'cors' // Enable CORS
+      credentials: 'include',
+      mode: 'cors'
     });
     
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
       throw new Error(error.message || 'Something went wrong');
     }
     
@@ -36,9 +67,9 @@ const api = {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
       headers,
-      credentials: 'include', // Include credentials (cookies) with the request
-      mode: 'cors', // Enable CORS
       body: JSON.stringify(data),
+      credentials: 'include',
+      mode: 'cors'
     });
     
     if (!response.ok) {
@@ -62,7 +93,15 @@ const api = {
       method: 'PUT',
       headers,
       body: JSON.stringify(data),
+      credentials: 'include',
+      mode: 'cors'
     });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Something went wrong');
+    }
+    
     return await response.json();
   },
 
@@ -76,8 +115,16 @@ const api = {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'DELETE',
       headers,
+      credentials: 'include',
+      mode: 'cors'
     });
-    return await response.json();
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Something went wrong');
+    }
+    
+    return await response.json().catch(() => ({}));
   },
 };
 
