@@ -15,7 +15,8 @@ module.exports = {
         url: require.resolve('url/'),
         assert: require.resolve('assert/'),
         buffer: require.resolve('buffer/'),
-        path: require.resolve('path-browserify')
+        path: require.resolve('path-browserify'),
+        process: require.resolve('process/browser')
       };
 
       // Add plugins for global variables
@@ -29,7 +30,8 @@ module.exports = {
       // Fix for fs module
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
-        'fs': false
+        'fs': false,
+        'process': 'process/browser'
       };
 
       return webpackConfig;
