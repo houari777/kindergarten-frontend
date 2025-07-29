@@ -30,7 +30,8 @@
     "stream-http": "^3.2.0",
     "typescript": "^4.9.5",
     "url": "^0.11.3",
-    "util": "^0.12.5"
+    "util": "^0.12.5",
+    "xlsx": "^0.18.5"
   },
   "scripts": {
     "start": "serve -s build",
