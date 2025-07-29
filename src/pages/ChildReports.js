@@ -1,9 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { useTranslation } from 'react-i18next';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { message } from 'antd';
+
+// Import our Arabic PDF utility
+import { loadFonts } from '../utils/arabicFonts';
 
 function ChildReports() {
   const { t, i18n } = useTranslation();
@@ -15,60 +19,109 @@ function ChildReports() {
   const [newReport, setNewReport] = useState({ date: '', type: 'يومي', content: '' });
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [editReport, setEditReport] = useState(null);
   const [editError, setEditError] = useState('');
   const [editLoading, setEditLoading] = useState(false);
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [attestation, setAttestation] = useState(null);
+  const [attestationLoading, setAttestationLoading] = useState(false);
+  const [attestationError, setAttestationError] = useState('');
 
-  const token = localStorage.getItem('token');
-
-  const fetchReports = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`http://localhost:5000/api/reports?childId=${childId}`, { headers: { Authorization: 'Bearer ' + token } });
-      const data = await res.json();
-      if (data.success) {
-        setReports(data.reports);
-      } else {
-        setError(data.message || t('Error occurred'));
-      }
-    } catch (err) {
-      setError(t('Network error'));
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Fetch reports from Firestore
   useEffect(() => {
-    fetchReports();
-    // eslint-disable-next-line
+    if (!childId) return;
+    
+    console.log('Setting up reports listener for child:', childId);
+    setLoading(true);
+    
+    const reportsQuery = query(collection(db, 'reports'), where('childId', '==', childId));
+    
+    const unsubscribe = onSnapshot(
+      reportsQuery,
+      (snapshot) => {
+        console.log('Reports snapshot received, docs count:', snapshot.docs.length);
+        const reportsData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Reports data:', reportsData);
+        setReports(reportsData);
+        setLoading(false);
+        setError('');
+      },
+      (error) => {
+        console.error('Error in reports listener:', error);
+        setError('Failed to load reports: ' + error.message);
+        setLoading(false);
+      }
+    );
+
+    return () => {
+      console.log('Cleaning up reports listener');
+      unsubscribe();
+    };
+  }, [childId]);
+
+  // Fetch attestation from Firestore
+  useEffect(() => {
+    if (!childId) return;
+    
+    console.log('Setting up attestation listener for child:', childId);
+    setAttestationLoading(true);
+    
+    const attestationQuery = query(collection(db, 'attestations'), where('childId', '==', childId));
+    
+    const unsubscribe = onSnapshot(
+      attestationQuery,
+      (snapshot) => {
+        console.log('Attestation snapshot received, docs count:', snapshot.docs.length);
+        if (!snapshot.empty) {
+          const attestationData = snapshot.docs[0].data();
+          console.log('Attestation data:', attestationData);
+          setAttestation(attestationData);
+        } else {
+          setAttestation(null);
+        }
+        setAttestationLoading(false);
+        setAttestationError('');
+      },
+      (error) => {
+        console.error('Error in attestation listener:', error);
+        setAttestationError('Failed to load attestation: ' + error.message);
+        setAttestationLoading(false);
+      }
+    );
+
+    return () => {
+      console.log('Cleaning up attestation listener');
+      unsubscribe();
+    };
   }, [childId]);
 
   const handleAddReport = async (e) => {
     e.preventDefault();
     setAddError('');
     setAddLoading(true);
+    
     try {
-      const res = await fetch('http://localhost:5000/api/reports', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ ...newReport, childId })
+      console.log('Adding new report:', { ...newReport, childId });
+      await addDoc(collection(db, 'reports'), {
+        date: newReport.date,
+        type: newReport.type,
+        content: newReport.content,
+        childId: childId,
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowAdd(false);
-        setNewReport({ date: '', type: 'يومي', content: '' });
-        setSuccessMsg(t('Report added successfully'));
-        fetchReports();
-      } else {
-        setAddError(data.message || t('Addition failed'));
-      }
-    } catch (err) {
-      setAddError(t('Network error'));
+      
+      message.success(t('Report added successfully'));
+      setNewReport({ date: '', type: 'يومي', content: '' });
+      setShowAdd(false);
+    } catch (error) {
+      console.error('Error adding report:', error);
+      setAddError(t('Failed to add report: ') + error.message);
     } finally {
       setAddLoading(false);
     }
@@ -78,47 +131,49 @@ function ChildReports() {
     e.preventDefault();
     setEditError('');
     setEditLoading(true);
+    
     try {
-      const res = await fetch(`http://localhost:5000/api/reports/${editReport.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({ date: editReport.date, type: editReport.type, content: editReport.content })
+      console.log('Updating report:', editReport);
+      await updateDoc(doc(db, 'reports', editReport.id), {
+        date: editReport.date,
+        type: editReport.type,
+        content: editReport.content,
+        updatedAt: new Date()
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowEdit(false);
-        setEditReport(null);
-        setSuccessMsg(t('Report updated successfully'));
-        fetchReports();
-      } else {
-        setEditError(data.message || t('Edit failed'));
-      }
-    } catch (err) {
-      setEditError(t('Network error'));
+      
+      message.success(t('Report updated successfully'));
+      setShowEdit(false);
+      setEditReport(null);
+    } catch (error) {
+      console.error('Error updating report:', error);
+      setEditError(t('Failed to update report: ') + error.message);
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleDeleteReport = async (id) => {
+  const handleDeleteReport = async (reportId) => {
+    if (!reportId) {
+      setDeleteId(null);
+      return;
+    }
+    
     setDeleteLoading(true);
-    setSuccessMsg('');
+    
     try {
-      const res = await fetch(`http://localhost:5000/api/reports/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccessMsg(t('Report deleted successfully'));
-        fetchReports();
-      }
-    } catch (err) {}
-    setDeleteId(null);
-    setDeleteLoading(false);
+      console.log('Deleting report:', reportId);
+      await deleteDoc(doc(db, 'reports', reportId));
+      message.success(t('Report deleted successfully'));
+      setDeleteId(null);
+    } catch (error) {
+      console.error('Error deleting report:', error);
+      message.error(t('Failed to delete report: ') + error.message);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
-  // تصدير إلى Excel
+  // Export to Excel
   const exportToExcel = () => {
     const exportData = reports.map(rep => ({
       التاريخ: rep.date,
@@ -131,26 +186,322 @@ function ChildReports() {
     XLSX.writeFile(wb, 'child_reports.xlsx');
   };
 
-  // تصدير إلى PDF
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    const exportData = reports.map(rep => [
-      rep.date,
-      rep.type,
-      rep.content,
-    ]);
-    doc.autoTable({
-      head: [[
-        t('Date'),
-        t('Type'),
-        t('Content'),
-      ]],
-      body: exportData,
-      styles: { font: 'arabic', fontStyle: 'normal', halign: 'right' },
-      headStyles: { fillColor: [25, 118, 210] },
-      margin: { right: 10, left: 10 },
-    });
-    doc.save('child_reports.pdf');
+  // PDF export with Arabic support
+  const exportToPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Get the pdfmake instance
+      const pdfMake = window.pdfMake;
+      if (!pdfMake) {
+        throw new Error('PDF library not loaded');
+      }
+      
+      try {
+        // Load Arabic fonts
+        const fontsLoaded = await loadFonts();
+        if (!fontsLoaded) {
+          throw new Error('Failed to load Arabic fonts');
+        }
+      } catch (fontError) {
+        console.error('Font loading error:', fontError);
+        // Continue with default fonts if Arabic font loading fails
+        console.warn('Falling back to default fonts');
+      }
+      
+      // Prepare table data
+      const tableBody = [
+        // Table header
+        [
+          { text: 'التاريخ', style: 'tableHeader' },
+          { text: 'نوع التقرير', style: 'tableHeader' },
+          { text: 'المحتوى', style: 'tableHeader' }
+        ],
+        // Table rows
+        ...reports.map(report => ([ 
+          report.date || '-',
+          report.type || '-',
+          report.content || '-'
+        ]))
+      ];
+      
+      // Document definition
+      const docDefinition = {
+        pageOrientation: 'portrait',
+        pageSize: 'A4',
+        content: [
+          { 
+            text: 'تقرير أنشطة الطفل', 
+            style: 'header',
+            alignment: 'center',
+            margin: [0, 0, 0, 10]
+          },
+          { 
+            text: `تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}`, 
+            style: 'subheader',
+            alignment: 'right',
+            margin: [0, 0, 0, 20]
+          },
+          {
+            table: {
+              headerRows: 1,
+              widths: ['auto', 'auto', '*'],
+              body: tableBody
+            },
+            layout: {
+              fillColor: (rowIndex) => rowIndex % 2 === 0 ? '#f5f5f5' : null,
+              hLineWidth: () => 0.5,
+              vLineWidth: () => 0.5,
+              hLineColor: () => '#cccccc',
+              vLineColor: () => '#cccccc',
+              paddingTop: () => 5,
+              paddingBottom: () => 5,
+              paddingLeft: () => 10,
+              paddingRight: () => 10,
+            }
+          }
+        ],
+        styles: {
+          header: {
+            fontSize: 18,
+            bold: true
+          },
+          subheader: {
+            fontSize: 12
+          },
+          tableHeader: {
+            bold: true,
+            fontSize: 12,
+            color: 'white',
+            fillColor: '#1976d2',
+            alignment: 'center',
+            margin: [0, 5, 0, 5]
+          }
+        },
+        defaultStyle: {
+          font: 'Amiri',
+          alignment: 'right',
+          rtl: true,
+          fontSize: 11,
+          lineHeight: 1.5
+        },
+        // Set default font family
+        defaultFont: 'Amiri'
+      };
+      
+      // Create and download PDF
+      pdfMake.createPdf(docDefinition).download('تقرير_الطفل.pdf');
+      
+    } catch (error) {
+      console.error('Error in ChildReports:', error);
+      alert('حدث خطأ أثناء إنشاء ملف PDF. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // PDF export for attestation
+  const exportAttestationToPDF = async () => {
+    try {
+      setLoading(true);
+      
+      // Get the pdfmake instance
+      const pdfMake = window.pdfMake;
+      if (!pdfMake) {
+        throw new Error('PDF library not loaded');
+      }
+      
+      try {
+        // Load Arabic fonts
+        const fontsLoaded = await loadFonts();
+        if (!fontsLoaded) {
+          throw new Error('Failed to load Arabic fonts');
+        }
+      } catch (fontError) {
+        console.error('Font loading error:', fontError);
+        console.warn('Falling back to default fonts');
+      }
+      
+      // Format date in French format (DD/MM/YYYY)
+      const formatFrenchDate = (date) => {
+        if (!date) return new Date().toLocaleDateString('fr-FR');
+        const d = date.seconds ? new Date(date.seconds * 1000) : new Date(date);
+        return d.toLocaleDateString('fr-FR');
+      };
+
+      // Document definition
+      const docDefinition = {
+        pageOrientation: 'portrait',
+        pageSize: 'A4',
+        pageMargins: [40, 60, 40, 60],
+        content: [
+          { 
+            text: 'شهادة تسجيل الطفل', 
+            style: 'header',
+            alignment: 'center',
+            margin: [0, 0, 0, 40]
+          },
+          {
+            text: 'تمهيدي :الصف',
+            style: 'infoLine',
+            alignment: 'right',
+            margin: [0, 0, 0, 15]
+          },
+          {
+            text: ':ولي الأمر',
+            style: 'infoLine',
+            alignment: 'right',
+            margin: [0, 0, 0, 15]
+          },
+          {
+            text: `${formatFrenchDate(attestation.inscriptionDate || new Date())} :تاريخ التسجيل`,
+            style: 'infoLine',
+            alignment: 'right',
+            margin: [0, 0, 0, 15]
+          },
+          {
+            text: `نشهد بأن الطفل/الطفلة ${attestation.childName || 'الطفل'} مسجل/ة في مؤسستنا التعليمية.`,
+            style: 'attestationMessage',
+            alignment: 'right',
+            margin: [0, 40, 0, 40]
+          },
+          {
+            text: '___________________',
+            alignment: 'right',
+            margin: [0, 0, 0, 10]
+          },
+          {
+            text: 'توقيع',
+            style: 'signature',
+            alignment: 'right',
+            margin: [0, 0, 0, 0]
+          }
+        ],
+        styles: {
+          header: {
+            fontSize: 20,
+            bold: true,
+            color: '#2c3e50',
+            font: 'Amiri'
+          },
+          infoLine: {
+            fontSize: 14,
+            lineHeight: 1.5,
+            font: 'Amiri'
+          },
+          attestationMessage: {
+            fontSize: 16,
+            lineHeight: 1.8,
+            bold: true,
+            color: '#2c3e50',
+            alignment: 'right',
+            font: 'Amiri'
+          },
+          signature: {
+            fontSize: 14,
+            bold: true,
+            font: 'Amiri'
+          }
+        },
+        defaultStyle: {
+          font: 'Amiri',
+          fontSize: 12,
+          lineHeight: 1.5
+        }
+      };
+      
+      // Create and download PDF
+      pdfMake.createPdf(docDefinition).download(`شهادة_تسجيل_الطفل_${attestation.childName || 'الطفل'}.pdf`);
+      
+    } catch (error) {
+      console.error('Error in exportAttestationToPDF:', error);
+      alert('حدث خطأ أثناء إنشاء ملف PDF. يرجى المحاولة مرة أخرى.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateAttestation = async () => {
+    setAttestationLoading(true);
+    setAttestationError('');
+    
+    try {
+      // Check if attestation already exists
+      const attestationQuery = query(collection(db, 'attestations'), where('childId', '==', childId));
+      const existingAttestations = await getDocs(attestationQuery);
+      
+      if (!existingAttestations.empty) {
+        // Attestation already exists, just show it
+        const attestationData = existingAttestations.docs[0].data();
+        setAttestation(attestationData);
+        setAttestationLoading(false);
+        message.success(t('Attestation loaded successfully'));
+        return;
+      }
+      
+      // Try different collection names for children data
+      let childData = null;
+      let childDoc = null;
+      
+      // Try 'enfants' collection first
+      try {
+        childDoc = await getDoc(doc(db, 'enfants', childId));
+        if (childDoc.exists()) {
+          childData = childDoc.data();
+        }
+      } catch (error) {
+        console.log('Child not found in enfants collection');
+      }
+      
+      // Try 'children' collection if not found in 'enfants'
+      if (!childData) {
+        try {
+          childDoc = await getDoc(doc(db, 'children', childId));
+          if (childDoc.exists()) {
+            childData = childDoc.data();
+          }
+        } catch (error) {
+          console.log('Child not found in children collection');
+        }
+      }
+      
+      // If still not found, create a basic attestation with the childId
+      if (!childData) {
+        console.log('Child document not found, creating basic attestation');
+        childData = {
+          name: 'Child ' + childId,
+          classeId: 'Unknown',
+          parentId: 'Unknown'
+        };
+      }
+      
+      // Generate new attestation
+      const attestationData = {
+        childId: childId,
+        childName: childData.name || 'Child ' + childId,
+        classId: childData.classeId || childData.classId || 'Unknown',
+        parentIds: childData.parentId || childData.parentIds || 'Unknown',
+        inscriptionDate: new Date(),
+        message: i18n.language === 'ar' 
+          ? `نشهد بأن الطفل/الطفلة ${childData.name || 'Child ' + childId} مسجل/ة في مؤسستنا التعليمية.`
+          : `Nous certifions que l'enfant ${childData.name || 'Child ' + childId} est inscrit(e) dans notre établissement.`,
+        messageAr: `نشهد بأن الطفل/الطفلة ${childData.name || 'Child ' + childId} مسجل/ة في مؤسستنا التعليمية.`,
+        messageFr: `Nous certifions que l'enfant ${childData.name || 'Child ' + childId} est inscrit(e) dans notre établissement.`,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      // Save to Firestore
+      await addDoc(collection(db, 'attestations'), attestationData);
+      
+      setAttestation(attestationData);
+      message.success(t('Attestation generated successfully'));
+    } catch (error) {
+      console.error('Error generating attestation:', error);
+      setAttestationError('Failed to generate attestation: ' + error.message);
+    } finally {
+      setAttestationLoading(false);
+    }
   };
 
   if (loading) return <div style={{ margin: 40 }}>{t('Loading', 'جاري التحميل...')}</div>;
@@ -161,8 +512,21 @@ function ChildReports() {
       <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
         <button onClick={exportToExcel}>{t('Export to Excel')}</button>
         <button onClick={exportToPDF}>{t('Export to PDF')}</button>
+        <button onClick={handleGenerateAttestation}>{t('Generate Attestation')}</button>
+        {attestation && <button onClick={exportAttestationToPDF}>{t('Export Attestation to PDF')}</button>}
       </div>
-      {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
+      {attestationLoading && <div style={{ color: '#1976d2', marginBottom: 8 }}>{t('Loading attestation...')}</div>}
+      {attestationError && <div style={{ color: 'red', marginBottom: 8 }}>{attestationError}</div>}
+      {attestation && (
+        <div style={{ background: '#f5f5f5', padding: 16, borderRadius: 8, marginBottom: 16 }}>
+          <h3>{t('Attestation d&apos;inscription')}</h3>
+          <div><b>{t('Nom de l&apos;enfant')} :</b> {attestation.childName}</div>
+          <div><b>{t('Classe')} :</b> {attestation.classId}</div>
+          <div><b>{t('Parents')} :</b> {Array.isArray(attestation.parentIds) ? attestation.parentIds.join(', ') : attestation.parentIds}</div>
+          <div><b>{t('Date d&apos;inscription')} :</b> {attestation.inscriptionDate && attestation.inscriptionDate._seconds ? new Date(attestation.inscriptionDate._seconds * 1000).toLocaleDateString() : '-'}</div>
+          <div style={{ marginTop: 8 }}>{attestation.message}</div>
+        </div>
+      )}
       <button style={{ marginBottom: 16 }} onClick={() => setShowAdd(true)}>{t('Add Report')}</button>
       {showAdd && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -257,4 +621,4 @@ function ChildReports() {
   );
 }
 
-export default ChildReports; 
+export default ChildReports;

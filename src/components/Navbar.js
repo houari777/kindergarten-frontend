@@ -1,15 +1,23 @@
 import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase/config';
+import { useAuth } from '../contexts/AuthContext';
 
 function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { i18n, t } = useTranslation();
+  const { currentUser } = useAuth();
 
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    navigate('/login');
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
   };
 
   // تغيير اللغة
@@ -39,6 +47,7 @@ function Navbar() {
       <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold', fontSize: 18 }}>{t('Dashboard')}</Link>
       <Link to="/children" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Children Management')}</Link>
       <Link to="/users" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Users Management')}</Link>
+      <Link to="/teachers" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Teachers', 'إدارة المعلمين')}</Link>
       <Link to="/classes" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Class', 'إدارة الفصول')}</Link>
       <Link to="/bills" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Bills')}</Link>
       <Link to="/notifications" style={{ color: '#fff', textDecoration: 'none', fontSize: 16 }}>{t('Notifications')}</Link>
@@ -46,9 +55,14 @@ function Navbar() {
         <option value="ar">العربية</option>
         <option value="fr">Français</option>
       </select>
-      <button onClick={handleLogout} style={{ marginLeft: 'auto', background: '#fff', color: '#1976d2', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: 16 }}>{t('Logout')}</button>
+      {currentUser && (
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 14 }}>{currentUser.email}</span>
+          <button onClick={handleLogout} style={{ background: '#fff', color: '#1976d2', border: 'none', borderRadius: 6, padding: '8px 20px', cursor: 'pointer', fontWeight: 'bold', fontSize: 16 }}>{t('Logout')}</button>
+        </div>
+      )}
     </nav>
   );
 }
 
-export default Navbar; 
+export default Navbar;

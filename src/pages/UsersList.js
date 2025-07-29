@@ -1,66 +1,78 @@
 import React, { useEffect, useState } from 'react';
-import api from '../utils/api';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase/config';
+import { message } from 'antd';
 
 function UsersList() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [showAdd, setShowAdd] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'parent' });
+  const [editUser, setEditUser] = useState(null);
+  const [addLoading, setAddLoading] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [deleteId, setDeleteId] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [searchName, setSearchName] = useState('');
   const [searchEmail, setSearchEmail] = useState('');
   const [searchRole, setSearchRole] = useState('');
-  const [showAdd, setShowAdd] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'parent' });
-  const [addError, setAddError] = useState('');
-  const [addLoading, setAddLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
-  const [showEdit, setShowEdit] = useState(false);
-  const [editUser, setEditUser] = useState(null);
-  const [editError, setEditError] = useState('');
-  const [editLoading, setEditLoading] = useState(false);
-  const [deleteId, setDeleteId] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  const token = localStorage.getItem('token');
-
-  const fetchUsers = async () => {
+  // Fetch users from Firestore
+  useEffect(() => {
+    console.log('Setting up users listener...');
     setLoading(true);
-    setError('');
-    try {
-      let endpoint = '/users';
-      const params = [];
-      if (searchName) params.push(`name=${encodeURIComponent(searchName)}`);
-      if (searchEmail) params.push(`email=${encodeURIComponent(searchEmail)}`);
-      if (searchRole) params.push(`role=${encodeURIComponent(searchRole)}`);
-      if (params.length) endpoint += '?' + params.join('&');
-      const data = await api.get(endpoint, token);
-      if (data.success) {
-        setUsers(data.users);
-      } else {
-        setError(data.message || 'حدث خطأ');
+    
+    const unsubscribe = onSnapshot(
+      collection(db, 'users'),
+      (snapshot) => {
+        console.log('Users snapshot received, docs count:', snapshot.docs.length);
+        const usersData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Users data:', usersData);
+        setUsers(usersData);
+        setLoading(false);
+        setError('');
+      },
+      (error) => {
+        console.error('Error in users listener:', error);
+        setError('Failed to load users: ' + error.message);
+        setLoading(false);
       }
-    } catch (err) {
-      setError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+
+    return () => {
+      console.log('Cleaning up users listener');
+      unsubscribe();
+    };
+  }, []);
 
   const handleAddUser = async (e) => {
     e.preventDefault();
     setAddError('');
     setAddLoading(true);
+    
     try {
-      const data = await api.post('/auth/signup', newUser, token);
-      if (data.success) {
-        setShowAdd(false);
-        setNewUser({ name: '', email: '', password: '', role: 'parent' });
-        setSuccessMsg('تمت إضافة المستخدم بنجاح');
-        fetchUsers();
-      } else {
-        setAddError(data.message || 'فشل الإضافة');
-      }
-    } catch (err) {
-      setAddError('Network error');
+      console.log('Adding new user:', newUser);
+      await addDoc(collection(db, 'users'), {
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      message.success('User added successfully');
+      setNewUser({ name: '', email: '', password: '', role: 'parent' });
+      setShowAdd(false);
+    } catch (error) {
+      console.error('Error adding user:', error);
+      setAddError('Failed to add user: ' + error.message);
     } finally {
       setAddLoading(false);
     }
@@ -70,51 +82,56 @@ function UsersList() {
     e.preventDefault();
     setEditError('');
     setEditLoading(true);
+    
     try {
-      const data = await api.put(`/users/${editUser.id}`, editUser, token);
-      if (data.success) {
-        setShowEdit(false);
-        setEditUser(null);
-        setSuccessMsg('تم تعديل المستخدم بنجاح');
-        fetchUsers();
-      } else {
-        setEditError(data.message || 'فشل التعديل');
-      }
-    } catch (err) {
-      setEditError('Network error');
+      console.log('Updating user:', editUser);
+      await updateDoc(doc(db, 'users', editUser.id), {
+        name: editUser.name,
+        email: editUser.email,
+        role: editUser.role,
+        updatedAt: new Date()
+      });
+      
+      message.success('User updated successfully');
+      setShowEdit(false);
+      setEditUser(null);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      setEditError('Failed to update user: ' + error.message);
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleDeleteUser = async (id) => {
+  const handleDeleteUser = async (userId) => {
     setDeleteLoading(true);
-    setSuccessMsg('');
+    
     try {
-      const data = await api.delete(`/users/${id}`, token);
-      if (data.success) {
-        setSuccessMsg('تم حذف المستخدم بنجاح');
-        fetchUsers();
-      }
-    } catch (err) {}
-    setDeleteId(null);
-    setDeleteLoading(false);
+      console.log('Deleting user:', userId);
+      await deleteDoc(doc(db, 'users', userId));
+      message.success('User deleted successfully');
+      setDeleteId(null);
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      message.error('Failed to delete user: ' + error.message);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
-
-  useEffect(() => {
-    fetchUsers();
-    // eslint-disable-next-line
-  }, []);
 
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchUsers();
+    const filteredUsers = users.filter(user => 
+      (searchName === '' || user.name.includes(searchName)) && 
+      (searchEmail === '' || user.email.includes(searchEmail)) && 
+      (searchRole === '' || user.role === searchRole)
+    );
+    setUsers(filteredUsers);
   };
 
   return (
     <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
       <h2>إدارة المستخدمين</h2>
-      {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
       <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
         <input placeholder="بحث بالاسم" value={searchName} onChange={e => setSearchName(e.target.value)} />
         <input placeholder="بحث بالبريد الإلكتروني" value={searchEmail} onChange={e => setSearchEmail(e.target.value)} />
@@ -125,7 +142,7 @@ function UsersList() {
           <option value="admin">إدارة</option>
         </select>
         <button type="submit">بحث</button>
-        <button type="button" onClick={() => { setSearchName(''); setSearchEmail(''); setSearchRole(''); fetchUsers(); }}>إعادة تعيين</button>
+        <button type="button" onClick={() => { setSearchName(''); setSearchEmail(''); setSearchRole(''); setUsers(users); }}>إعادة تعيين</button>
         <button type="button" style={{ marginLeft: 'auto' }} onClick={() => setShowAdd(true)}>+ إضافة مستخدم</button>
       </form>
       {showAdd && (
@@ -206,7 +223,7 @@ function UsersList() {
             </tr>
           </thead>
           <tbody>
-            {users.map(user => (
+            {users && users.length > 0 ? users.map(user => (
               <tr key={user.id}>
                 <td>{user.name}</td>
                 <td>{user.email}</td>
@@ -217,7 +234,7 @@ function UsersList() {
                   <button style={{ color: 'red', marginRight: 8 }} onClick={() => setDeleteId(user.id)}>حذف</button>
                 </td>
               </tr>
-            ))}
+            )) : <tr><td colSpan={5}>لا يوجد بيانات</td></tr>}
           </tbody>
         </table>
       )}
@@ -225,4 +242,4 @@ function UsersList() {
   );
 }
 
-export default UsersList; 
+export default UsersList;

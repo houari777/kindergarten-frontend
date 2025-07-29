@@ -1,27 +1,76 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import api from '../utils/api';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { auth } from '../firebase/config';
+import { useAuth } from '../contexts/AuthContext';
 
 function Login() {
   const { t, i18n } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { currentUser } = useAuth();
+  const from = location.state?.from?.pathname || '/';
+
+  // Redirect if user is already logged in
+  useEffect(() => {
+    if (currentUser) {
+      navigate(from, { replace: true });
+    }
+  }, [currentUser, navigate, from]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    
     try {
-      const data = await api.post('/auth/login', { email, password }, null);
-      if (data.success) {
-        localStorage.setItem('token', data.token);
-        window.location.href = '/'; // Redirect to home page
-      } else {
-        setError(data.message || 'Login failed');
-      }
+      console.log('Attempting to sign in with:', { 
+        email: email,
+        timestamp: new Date().toISOString() 
+      });
+      
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      console.log('Login successful, user:', {
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        emailVerified: userCredential.user.emailVerified
+      });
+      
+      // The onAuthStateChanged in AuthContext will handle the redirect
     } catch (err) {
-      console.error('Login error:', err);
-      setError('Network error');
+      console.error('Login error:', {
+        code: err.code,
+        message: err.message,
+        email: email,
+        timestamp: new Date().toISOString()
+      });
+      
+      let errorMessage = 'Failed to log in. ';
+      
+      switch (err.code) {
+        case 'auth/invalid-credential':
+          errorMessage = 'Invalid email or password. Please check your credentials.';
+          break;
+        case 'auth/user-not-found':
+          errorMessage = 'No account found with this email address.';
+          break;
+        case 'auth/wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = 'Too many failed login attempts. Please try again later or reset your password.';
+          break;
+        case 'auth/user-disabled':
+          errorMessage = 'This account has been disabled. Please contact support.';
+          break;
+        default:
+          errorMessage += `Error: ${err.message}`;
+      }
+      
+      setError(errorMessage);
     }
   };
 

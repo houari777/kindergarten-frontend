@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import { Button } from 'antd';
+import { Button, Modal, Spin, Select, message } from 'antd';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
+import { db } from '../firebase/config';
 
 function ClassesList() {
   const [classes, setClasses] = useState([]);
@@ -10,7 +12,6 @@ function ClassesList() {
   const [newClass, setNewClass] = useState({ name: '', description: '' });
   const [addError, setAddError] = useState('');
   const [addLoading, setAddLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
   const [showEdit, setShowEdit] = useState(false);
   const [editClass, setEditClass] = useState(null);
   const [editError, setEditError] = useState('');
@@ -19,48 +20,110 @@ function ClassesList() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [allChildren, setAllChildren] = useState([]);
   const [allTeachers, setAllTeachers] = useState([]);
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [selectedClass, setSelectedClass] = useState(null);
+  const [selectedChildren, setSelectedChildren] = useState([]);
+  const [selectedTeachers, setSelectedTeachers] = useState([]);
+  const [membersLoading, setMembersLoading] = useState(false);
+  const [showClassDetails, setShowClassDetails] = useState(false);
+  const [classDetails, setClassDetails] = useState(null);
 
-  const token = localStorage.getItem('token');
-
-  const fetchClasses = async () => {
+  // Fetch classes from Firestore
+  useEffect(() => {
+    console.log('Setting up classes listener...');
     setLoading(true);
-    setError('');
-    try {
-      const res = await fetch('http://localhost:5000/api/classes', { headers: { Authorization: 'Bearer ' + token } });
-      const data = await res.json();
-      if (data.success) {
-        setClasses(data.classes);
-      } else {
-        setError(data.message || 'حدث خطأ');
+    
+    const unsubscribe = onSnapshot(
+      collection(db, 'classes'),
+      (snapshot) => {
+        console.log('Classes snapshot received, docs count:', snapshot.docs.length);
+        const classesData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Classes data:', classesData);
+        setClasses(classesData);
+        setLoading(false);
+        setError('');
+      },
+      (error) => {
+        console.error('Error in classes listener:', error);
+        setError('Failed to load classes: ' + error.message);
+        setLoading(false);
       }
-    } catch (err) {
-      setError('Network error');
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+
+    return () => {
+      console.log('Cleaning up classes listener');
+      unsubscribe();
+    };
+  }, []);
+
+  // Fetch children and teachers for member management
+  useEffect(() => {
+    console.log('Setting up children and teachers listeners...');
+    
+    // Listen to children
+    const childrenUnsubscribe = onSnapshot(
+      collection(db, 'enfants'),
+      (snapshot) => {
+        const childrenData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Children data for classes:', childrenData);
+        setAllChildren(childrenData);
+      },
+      (error) => {
+        console.error('Error fetching children:', error);
+      }
+    );
+
+    // Listen to teachers
+    const teachersQuery = query(collection(db, 'users'), where('role', '==', 'teacher'));
+    const teachersUnsubscribe = onSnapshot(
+      teachersQuery,
+      (snapshot) => {
+        const teachersData = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        console.log('Teachers data for classes:', teachersData);
+        setAllTeachers(teachersData);
+      },
+      (error) => {
+        console.error('Error fetching teachers:', error);
+      }
+    );
+
+    return () => {
+      childrenUnsubscribe();
+      teachersUnsubscribe();
+    };
+  }, []);
 
   const handleAddClass = async (e) => {
     e.preventDefault();
     setAddError('');
     setAddLoading(true);
+    
     try {
-      const res = await fetch('http://localhost:5000/api/classes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify(newClass)
+      console.log('Adding new class:', newClass);
+      await addDoc(collection(db, 'classes'), {
+        name: newClass.name,
+        description: newClass.description,
+        childrenIds: [],
+        teacherIds: [],
+        createdAt: new Date(),
+        updatedAt: new Date()
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowAdd(false);
-        setNewClass({ name: '', description: '' });
-        setSuccessMsg('تمت إضافة الفصل بنجاح');
-        fetchClasses();
-      } else {
-        setAddError(data.message || 'فشل الإضافة');
-      }
-    } catch (err) {
-      setAddError('Network error');
+      
+      message.success('Class added successfully');
+      setNewClass({ name: '', description: '' });
+      setShowAdd(false);
+    } catch (error) {
+      console.error('Error adding class:', error);
+      setAddError('Failed to add class: ' + error.message);
     } finally {
       setAddLoading(false);
     }
@@ -70,80 +133,86 @@ function ClassesList() {
     e.preventDefault();
     setEditError('');
     setEditLoading(true);
+    
     try {
-      const res = await fetch(`http://localhost:5000/api/classes/${editClass.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
-        body: JSON.stringify({
-          name: editClass.name,
-          description: editClass.description,
-          childrenIds: editClass.childrenIds || [],
-          teacherIds: editClass.teacherIds || []
-        })
+      console.log('Updating class:', editClass);
+      await updateDoc(doc(db, 'classes', editClass.id), {
+        name: editClass.name,
+        description: editClass.description,
+        childrenIds: editClass.childrenIds || [],
+        teacherIds: editClass.teacherIds || [],
+        updatedAt: new Date()
       });
-      const data = await res.json();
-      if (data.success) {
-        setShowEdit(false);
-        setEditClass(null);
-        setSuccessMsg('تم تعديل الفصل بنجاح');
-        fetchClasses();
-      } else {
-        setEditError(data.message || 'فشل التعديل');
-      }
-    } catch (err) {
-      setEditError('Network error');
+      
+      message.success('Class updated successfully');
+      setShowEdit(false);
+      setEditClass(null);
+    } catch (error) {
+      console.error('Error updating class:', error);
+      setEditError('Failed to update class: ' + error.message);
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleDeleteClass = async (id) => {
+  const handleDeleteClass = async (classId) => {
+    if (!classId) {
+      setDeleteId(null);
+      return;
+    }
+    
     setDeleteLoading(true);
-    setSuccessMsg('');
+    
     try {
-      const res = await fetch(`http://localhost:5000/api/classes/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccessMsg('تم حذف الفصل بنجاح');
-        fetchClasses();
-      }
-    } catch (err) {}
-    setDeleteId(null);
-    setDeleteLoading(false);
+      console.log('Deleting class:', classId);
+      await deleteDoc(doc(db, 'classes', classId));
+      message.success('Class deleted successfully');
+      setDeleteId(null);
+    } catch (error) {
+      console.error('Error deleting class:', error);
+      message.error('Failed to delete class: ' + error.message);
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
-  useEffect(() => {
-    fetchClasses();
-    // eslint-disable-next-line
-  }, []);
+  const openMembersModal = (cls) => {
+    setSelectedClass(cls);
+    setSelectedChildren(cls.childrenIds || []);
+    setSelectedTeachers(cls.teacherIds || []);
+    setShowMembersModal(true);
+  };
 
-  // جلب جميع الأطفال والمعلمين عند تحميل الصفحة (لعرض الأسماء في الجدول)
-  useEffect(() => {
-    const fetchOptions = async () => {
-      try {
-        const [childrenRes, teachersRes] = await Promise.all([
-          fetch('http://localhost:5000/api/children', { headers: { Authorization: 'Bearer ' + token } }),
-          fetch('http://localhost:5000/api/users?role=teacher', { headers: { Authorization: 'Bearer ' + token } })
-        ]);
-        const childrenData = await childrenRes.json();
-        const teachersData = await teachersRes.json();
-        setAllChildren(childrenData.children || []);
-        setAllTeachers(teachersData.users || []);
-      } catch (err) {
-        setAllChildren([]);
-        setAllTeachers([]);
-      }
-    };
-    fetchOptions();
-  }, [token]);
+  const handleSaveMembers = async () => {
+    setMembersLoading(true);
+    
+    try {
+      console.log('Updating class members:', { selectedChildren, selectedTeachers });
+      await updateDoc(doc(db, 'classes', selectedClass.id), {
+        childrenIds: selectedChildren,
+        teacherIds: selectedTeachers,
+        updatedAt: new Date()
+      });
+      
+      message.success('Class members updated successfully');
+      setShowMembersModal(false);
+    } catch (error) {
+      console.error('Error updating class members:', error);
+      message.error('Failed to update class members: ' + error.message);
+    } finally {
+      setMembersLoading(false);
+    }
+  };
+
+  const openClassDetails = (cls) => {
+    setClassDetails(cls);
+    setShowClassDetails(true);
+  };
 
   return (
     <div style={{ maxWidth: '100%', margin: '40px auto', padding: 24, fontFamily: 'Tajawal, Arial, sans-serif' }}>
       <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: 'right', fontFamily: 'Tajawal, Arial, sans-serif' }}>إدارة الفصول</h2>
-      {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
+      {error && <div style={{ color: 'red', marginBottom: 12 }}>{error}</div>}
       <button style={{ marginBottom: 16 }} onClick={() => setShowAdd(true)}>+ إضافة فصل</button>
       {showAdd && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
@@ -157,7 +226,7 @@ function ClassesList() {
               </div>
               <div>
                 <label>الوصف:</label>
-                <input value={newClass.description} onChange={e => setNewClass({ ...newClass, description: e.target.value })} style={{ width: '100%' }} />
+                <textarea value={newClass.description} onChange={e => setNewClass({ ...newClass, description: e.target.value })} style={{ width: '100%' }} />
               </div>
               {addError && <div style={{ color: 'red', margin: '8px 0' }}>{addError}</div>}
               <button type="submit" disabled={addLoading} style={{ width: '100%', marginTop: 12 }}>إضافة</button>
@@ -169,7 +238,7 @@ function ClassesList() {
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: 32, borderRadius: 8, minWidth: 350, position: 'relative' }}>
             <button onClick={() => setShowEdit(false)} style={{ position: 'absolute', top: 8, right: 8 }}>X</button>
-            <h3>تعديل بيانات الفصل</h3>
+            <h3>تعديل الفصل</h3>
             <form onSubmit={handleEditClass}>
               <div>
                 <label>اسم الفصل:</label>
@@ -177,23 +246,7 @@ function ClassesList() {
               </div>
               <div>
                 <label>الوصف:</label>
-                <input value={editClass.description} onChange={e => setEditClass({ ...editClass, description: e.target.value })} style={{ width: '100%' }} />
-              </div>
-              <div>
-                <label>الأطفال في الفصل:</label>
-                <select multiple value={editClass.childrenIds || []} onChange={e => setEditClass({ ...editClass, childrenIds: Array.from(e.target.selectedOptions, o => o.value) })} style={{ width: '100%', minHeight: 60 }}>
-                  {allChildren.map(child => (
-                    <option key={child.id} value={child.id}>{child.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label>المعلمون في الفصل:</label>
-                <select multiple value={editClass.teacherIds || []} onChange={e => setEditClass({ ...editClass, teacherIds: Array.from(e.target.selectedOptions, o => o.value) })} style={{ width: '100%', minHeight: 60 }}>
-                  {allTeachers.map(teacher => (
-                    <option key={teacher.id} value={teacher.id}>{teacher.name}</option>
-                  ))}
-                </select>
+                <textarea value={editClass.description} onChange={e => setEditClass({ ...editClass, description: e.target.value })} style={{ width: '100%' }} />
               </div>
               {editError && <div style={{ color: 'red', margin: '8px 0' }}>{editError}</div>}
               <button type="submit" disabled={editLoading} style={{ width: '100%', marginTop: 12 }}>حفظ التعديلات</button>
@@ -202,43 +255,103 @@ function ClassesList() {
         </div>
       )}
       {deleteId && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div style={{ background: '#fff', padding: 32, borderRadius: 8, minWidth: 350, position: 'relative' }}>
-            <h3>تأكيد حذف الفصل</h3>
-            <p>هل أنت متأكد أنك تريد حذف هذا الفصل؟</p>
-            <button onClick={() => handleDeleteClass(deleteId)} disabled={deleteLoading} style={{ color: 'red', marginRight: 8 }}>تأكيد الحذف</button>
-            <button onClick={() => setDeleteId(null)} disabled={deleteLoading}>إلغاء</button>
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div style={{ background: '#fff', padding: '24px', borderRadius: '8px', minWidth: '350px', maxWidth: '90%', boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+            <h3 style={{ marginTop: 0, color: '#d32f2f' }}>تأكيد حذف الفصل</h3>
+            <p style={{ marginBottom: '24px' }}>هل أنت متأكد أنك تريد حذف هذا الفصل؟ لا يمكن التراجع عن هذا الإجراء.</p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button 
+                onClick={() => setDeleteId(null)} 
+                disabled={deleteLoading}
+                style={{
+                  padding: '8px 16px',
+                  border: '1px solid #ddd',
+                  background: '#fff',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  opacity: deleteLoading ? 0.6 : 1
+                }}
+              >
+                إلغاء
+              </button>
+              <button 
+                onClick={() => handleDeleteClass(deleteId)} 
+                disabled={deleteLoading}
+                style={{
+                  padding: '8px 16px',
+                  background: '#d32f2f',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  opacity: deleteLoading ? 0.6 : 1
+                }}
+              >
+                {deleteLoading ? 'جاري الحذف...' : 'تأكيد الحذف'}
+              </button>
+            </div>
           </div>
         </div>
       )}
-      {loading ? <div>جاري التحميل...</div> : error ? <div style={{ color: 'red' }}>{error}</div> : (
+      {loading ? <div>جاري التحميل...</div> : (
         <div style={{ overflowX: 'auto', background: '#fff', borderRadius: 12, boxShadow: '0 2px 8px rgba(25, 118, 210, 0.07)', padding: 0, marginTop: 16 }}>
           <table style={{ minWidth: 1000, width: '100%', borderCollapse: 'collapse', fontSize: 16, fontFamily: 'Tajawal, Arial, sans-serif' }}>
             <thead>
-              <tr style={{ background: '#f5f5f5', fontWeight: 700, fontSize: 17 }}>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>اسم الفصل</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>الوصف</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>الأطفال</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>المعلمون</th>
-                <th style={{ padding: '12px 8px', textAlign: 'center' }}>إجراءات</th>
+              <tr style={{ background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)', color: '#fff' }}>
+                <th style={{ padding: '16px 20px', textAlign: 'right', fontWeight: 600, fontSize: 16, borderBottom: 'none' }}>اسم الفصل</th>
+                <th style={{ padding: '16px 20px', textAlign: 'right', fontWeight: 600, fontSize: 16, borderBottom: 'none' }}>الوصف</th>
+                <th style={{ padding: '16px 20px', textAlign: 'center', fontWeight: 600, fontSize: 16, borderBottom: 'none' }}>عدد الأطفال</th>
+                <th style={{ padding: '16px 20px', textAlign: 'center', fontWeight: 600, fontSize: 16, borderBottom: 'none' }}>المعلم</th>
+                <th style={{ padding: '16px 20px', textAlign: 'center', fontWeight: 600, fontSize: 16, borderBottom: 'none' }}>الإجراءات</th>
               </tr>
             </thead>
             <tbody>
-              {classes.map(cls => (
-                <tr key={cls.id} style={{ borderBottom: '1px solid #e3eaf2' }} className="custom-table-row">
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.name}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.description || '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.childrenIds && cls.childrenIds.length > 0 ? cls.childrenIds.map(cid => {
-                    const child = allChildren.find(c => c.id === cid);
-                    return child ? child.name : cid;
-                  }).join(', ') : '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{cls.teacherIds && cls.teacherIds.length > 0 ? cls.teacherIds.map(tid => {
-                    const teacher = allTeachers.find(t => t.id === tid);
-                    return teacher ? teacher.name : tid;
-                  }).join(', ') : '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    <Button type="link" icon={<EditOutlined />} style={{ color: '#1976d2', fontWeight: 600 }} onClick={() => { setEditClass({ ...cls }); setShowEdit(true); }}>تعديل</Button>
-                    <Button type="link" icon={<DeleteOutlined />} danger style={{ fontWeight: 600 }} onClick={() => setDeleteId(cls.id)}>حذف</Button>
+              {classes.map((cls) => (
+                <tr key={cls.id} style={{ borderBottom: '1px solid #f0f0f0', transition: 'background-color 0.2s' }}>
+                  <td style={{ padding: '16px 20px', fontWeight: 500, color: '#333' }}>{cls.name}</td>
+                  <td style={{ padding: '16px 20px', color: '#666', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cls.description}</td>
+                  <td style={{ padding: '16px 20px', textAlign: 'center', fontWeight: 500, color: '#1976d2' }}>
+                    {Array.isArray(cls.childrenIds) ? cls.childrenIds.length : 0}
+                  </td>
+                  <td style={{ padding: '16px 20px', textAlign: 'center', color: '#666' }}>
+                    {Array.isArray(cls.teacherIds) && cls.teacherIds.length > 0 ? (() => {
+                      const teacher = allTeachers.find(t => t.id === cls.teacherIds[0]);
+                      return teacher ? teacher.name : cls.teacherIds[0];
+                    })() : '-'}
+                  </td>
+                  <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <Button
+                        size="small"
+                        icon={<EditOutlined />}
+                        onClick={() => { setEditClass(cls); setShowEdit(true); }}
+                        style={{ borderColor: '#1976d2', color: '#1976d2' }}
+                      >
+                        تعديل
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => openMembersModal(cls)}
+                        style={{ borderColor: '#4caf50', color: '#4caf50' }}
+                      >
+                        إدارة الأعضاء
+                      </Button>
+                      <Button
+                        size="small"
+                        onClick={() => openClassDetails(cls)}
+                        style={{ borderColor: '#ff9800', color: '#ff9800' }}
+                      >
+                        التفاصيل
+                      </Button>
+                      <Button
+                        size="small"
+                        danger
+                        icon={<DeleteOutlined />}
+                        onClick={() => setDeleteId(cls.id)}
+                      >
+                        حذف
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -246,15 +359,82 @@ function ClassesList() {
           </table>
         </div>
       )}
-      {/* إضافة CSS مخصص للـ Hover */}
       <style>{`
-.custom-table-row:hover {
-  background: #e3f2fd !important;
+.class-row:hover {
+  background: #f8f9ff !important;
   transition: background 0.2s;
 }
 `}</style>
+      {/* Modal pour gérer les membres de la classe */}
+      <Modal
+        title={`إدارة أعضاء الفصل: ${selectedClass?.name || ''}`}
+        open={showMembersModal}
+        onCancel={() => setShowMembersModal(false)}
+        onOk={handleSaveMembers}
+        okText="حفظ"
+        cancelText="إلغاء"
+        confirmLoading={membersLoading}
+      >
+        <Spin spinning={membersLoading}>
+          <div style={{ marginBottom: 16 }}>
+            <label>الأطفال في الفصل:</label>
+            <Select
+              mode="multiple"
+              showSearch
+              style={{ width: '100%' }}
+              value={selectedChildren}
+              onChange={setSelectedChildren}
+              placeholder="اختر الأطفال..."
+              optionFilterProp="children"
+              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+            >
+              {allChildren.map(child => (
+                <Select.Option key={child.id} value={child.id}>{child.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label>المعلم في الفصل:</label>
+            <Select
+              showSearch
+              style={{ width: '100%' }}
+              value={selectedTeachers[0] || undefined}
+              onChange={val => setSelectedTeachers(val ? [val] : [])}
+              placeholder="اختر المعلم..."
+              optionFilterProp="children"
+              filterOption={(input, option) => (option?.children ?? '').toLowerCase().includes(input.toLowerCase())}
+              allowClear
+            >
+              {allTeachers.map(teacher => (
+                <Select.Option key={teacher.id} value={teacher.id}>{teacher.name}</Select.Option>
+              ))}
+            </Select>
+          </div>
+        </Spin>
+      </Modal>
+      {/* Modal de détails de la classe */}
+      <Modal
+        title={`تفاصيل الفصل: ${classDetails?.name || ''}`}
+        open={showClassDetails}
+        onCancel={() => setShowClassDetails(false)}
+        footer={null}
+      >
+        <div style={{ marginBottom: 12 }}><b>عدد الأطفال :</b> {Array.isArray(classDetails?.childrenIds) ? classDetails.childrenIds.length : 0}</div>
+        <div style={{ marginBottom: 12 }}><b>المعلم :</b> {Array.isArray(classDetails?.teacherIds) && classDetails.teacherIds.length > 0 ? (() => {
+          const teacher = allTeachers.find(t => t.id === classDetails.teacherIds[0]);
+          return teacher ? teacher.name : classDetails.teacherIds[0];
+        })() : '-'}</div>
+        <div style={{ marginBottom: 8 }}><b>قائمة الأطفال :</b></div>
+        <ul style={{ paddingLeft: 20 }}>
+          {Array.isArray(classDetails?.childrenIds) && classDetails.childrenIds.length > 0 ?
+            classDetails.childrenIds.map(cid => {
+              const child = allChildren.find(c => c.id === cid);
+              return <li key={cid}>{child ? child.name : cid}</li>;
+            }) : <li>-</li>}
+        </ul>
+      </Modal>
     </div>
   );
 }
 
-export default ClassesList; 
+export default ClassesList;

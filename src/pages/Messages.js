@@ -23,7 +23,7 @@ function Messages() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/users?role=${role}`, { headers: { Authorization: 'Bearer ' + token } });
+        const res = await fetch(`http://localhost:5001/api/users?role=${role}`, { headers: { Authorization: 'Bearer ' + token } });
         const data = await res.json();
         setUsers(data.users || []);
       } catch (err) {
@@ -38,7 +38,7 @@ function Messages() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:5000/api/messages', { headers: { Authorization: 'Bearer ' + token } });
+      const res = await fetch('http://localhost:5001/api/messages', { headers: { Authorization: 'Bearer ' + token } });
       const data = await res.json();
       if (data.success) {
         setMessages(data.messages);
@@ -62,7 +62,7 @@ function Messages() {
     setSendError('');
     setSendLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/messages', {
+      const res = await fetch('http://localhost:5001/api/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({

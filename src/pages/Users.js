@@ -1,6 +1,6 @@
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
@@ -124,14 +124,80 @@ const Users = () => {
     setIsModalVisible(true);
   };
 
-  const handleCancel = () => {
-    setIsModalVisible(false);
-    setSelectedUser(null);
+  const exportToExcel = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredUsers);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Users');
+    XLSX.writeFile(wb, 'users.xlsx');
   };
 
-  const handleEdit = (user) => {
-    setSelectedUser(user);
-    setIsModalVisible(true);
+  const exportToPDF = () => {
+    try {
+      // Create a new jsPDF instance
+      const doc = new jsPDF();
+      
+      // Set document title
+      doc.setFontSize(18);
+      doc.text('Users Report', 14, 22);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      
+      // Prepare data for the table
+      const tableColumn = ['Name', 'Email', 'Role', 'Status', 'Created At'];
+      const tableRows = [];
+      
+      // Add data to table rows
+      filteredUsers.forEach(user => {
+        const userData = [
+          user.name || '-',
+          user.email || '-',
+          user.role || '-',
+          user.status || '-',
+          user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '-'
+        ];
+        tableRows.push(userData);
+      });
+      
+      // Add table using autoTable plugin
+      autoTable(doc, {
+        head: [tableColumn],
+        body: tableRows,
+        startY: 30,
+        styles: { 
+          fontSize: 10,
+          cellPadding: 3,
+          textColor: [0, 0, 0],
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+        },
+        headStyles: {
+          fillColor: [41, 128, 185],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold'
+        },
+        alternateRowStyles: {
+          fillColor: [245, 245, 245]
+        },
+        margin: { top: 30 }
+      });
+      
+      // Add footer
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.text(
+          `Page ${i} of ${pageCount}`,
+          doc.internal.pageSize.width - 30,
+          doc.internal.pageSize.height - 10
+        );
+      }
+      
+      // Save the PDF
+      doc.save('users_report.pdf');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      message.error('Failed to generate PDF. Please try again.');
+    }
   };
 
   const handleView = (user) => {

@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import {
-  Button,
-  Table,
-  Modal,
-  Form,
-  Input,
-  Select,
-  DatePicker,
-  message,
-  Popconfirm,
-  Tag,
-  Badge,
+import { 
+  Button, 
+  Table, 
+  Modal, 
+  Form, 
+  Input, 
+  Select, 
+  DatePicker, 
+  message, 
+  Popconfirm, 
+  Badge, 
+  Spin 
 } from 'antd';
 import moment from 'moment';
 import * as XLSX from 'xlsx';
@@ -26,13 +26,13 @@ const statusColors = {
   unpaid: 'red',
 };
 
-const Bills = () => {
+function Bills() {
   const { t, i18n } = useTranslation();
   const [bills, setBills] = useState([]);
   const [children, setChildren] = useState([]);
   const [parents, setParents] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false);
+  const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingBill, setEditingBill] = useState(null);
   const [form] = Form.useForm();
   const [filters, setFilters] = useState({ childId: '', parentId: '', status: '' });
@@ -66,7 +66,10 @@ const Bills = () => {
         headers: { Authorization: `Bearer ${token}` },
       });
       setChildren(res.data.children || []);
-    } catch (err) {}
+    } catch (error) {
+      console.error('Error fetching children:', error);
+      message.error('Failed to load children data');
+    }
   };
 
   const fetchParents = async () => {
@@ -76,13 +79,16 @@ const Bills = () => {
         params: { role: 'parent' },
       });
       setParents(res.data.users || []);
-    } catch (err) {}
+    } catch (error) {
+      console.error('Error fetching parents:', error);
+      message.error('Failed to load parents data');
+    }
   };
 
   const handleAdd = () => {
     setEditingBill(null);
     form.resetFields();
-    setModalVisible(true);
+    setIsModalVisible(true);
   };
 
   const handleEdit = (bill) => {
@@ -92,7 +98,7 @@ const Bills = () => {
       dueDate: bill.dueDate ? moment(bill.dueDate) : null,
       paidAt: bill.paidAt ? moment(bill.paidAt) : null,
     });
-    setModalVisible(true);
+    setIsModalVisible(true);
   };
 
   const handleDelete = async (id) => {
@@ -129,7 +135,7 @@ const Bills = () => {
         });
         message.success(t('Bill added successfully'));
       }
-      setModalVisible(false);
+      setIsModalVisible(false);
       fetchBills(filters);
     } catch (err) {
       message.error(t('Network error'));
@@ -299,9 +305,9 @@ const Bills = () => {
       />
       <Modal
         title={editingBill ? t('Edit Bill') : t('Add Bill')}
-        visible={modalVisible}
+        visible={isModalVisible}
         onOk={handleModalOk}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => setIsModalVisible(false)}
         okText={t('Save')}
         cancelText={t('Cancel')}
       >

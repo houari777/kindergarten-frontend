@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
   Table, 
@@ -17,7 +16,9 @@ import {
   Upload,
   Row,
   Col,
-  Badge
+  Badge,
+  Dropdown,
+  Menu
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -27,33 +28,34 @@ import {
   UserOutlined,
   UploadOutlined,
   FileTextOutlined,
-  MessageOutlined
+  MessageOutlined,
+  FilePdfOutlined,
+  DownOutlined
 } from '@ant-design/icons';
+import { useNavigate } from 'react-router-dom';
+import debounce from 'lodash/debounce';
+import { db } from '../firebase/config';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  updateDoc, 
+  doc, 
+  deleteDoc, 
+  getDoc, 
+  orderBy, 
+  onSnapshot, 
+  serverTimestamp 
+} from 'firebase/firestore';
+import { storage } from '../firebase/config';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
-
-// Sample data for demonstration
-const sampleData = [
-  {
-    id: '1',
-    name: 'أحمد محمد',
-    age: 5,
-    class: 'الروضة أ',
-    parent: 'محمد أحمد',
-    status: 'نشط',
-    lastCheckIn: '2023-07-17T08:30:00',
-  },
-  {
-    id: '2',
-    name: 'سارة خالد',
-    age: 4,
-    class: 'الروضة ب',
-    parent: 'خالد إبراهيم',
-    status: 'نشط',
-    lastCheckIn: '2023-07-17T08:45:00',
-  },
-];
 
 function ChildrenList() {
   const { t, i18n } = useTranslation();
@@ -63,6 +65,8 @@ function ChildrenList() {
   
   // Data state
   const [children, setChildren] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [allTeachers, setAllTeachers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   
@@ -99,171 +103,629 @@ function ChildrenList() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
 
-  const fetchChildren = async () => {
+  // Memoize the class name lookup for better performance
+  const getClassName = (classId) => {
+    const cls = classes.find(c => c.id === classId);
+    return cls ? cls.name : '-';
+  };
+
+  // Memoize the filtered children to prevent unnecessary recalculations
+  const filteredChildren = children.filter(child => {
+    if (!child) return false;
+    
+    const matchesName = !searchName || 
+      (child.name && child.name.toLowerCase().includes(searchName.toLowerCase()));
+    
+    const matchesClass = !searchClass || 
+      (child.classId && child.classId === searchClass);
+    
+    const matchesAge = !searchAge || 
+      (child.age && child.age.toString() === searchAge.toString());
+    
+    const matchesParent = !searchParent || 
+      (child.parentName && child.parentName.toLowerCase().includes(searchParent.toLowerCase()));
+    
+    const matchesHealth = !searchHealth || 
+      (child.health && child.health.toLowerCase().includes(searchHealth.toLowerCase()));
+    
+    return matchesName && matchesClass && matchesAge && matchesParent && matchesHealth;
+  });
+
+  // Memoized export to PDF function
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    // Add title
+    doc.setFont('Arial');
+    doc.setFontSize(20);
+    doc.text('قائمة الأطفال', 105, 15, { align: 'center' });
+    
+    // Add date
+    doc.setFontSize(10);
+    doc.text(`تاريخ التصدير: ${new Date().toLocaleDateString('ar-EG')}`, 200, 10, { align: 'right' });
+    
+    // Prepare data for the table
+    const tableColumn = ['الاسم', 'العمر', 'الصف', 'ولي الأمر', 'الحالة'];
+    const tableRows = [];
+    
+    filteredChildren.forEach(child => {
+      const className = getClassName(child.classId);
+      
+      const childData = [
+        child.name || '',
+        child.age || '',
+        className,
+        child.parentName || '',
+        child.status || 'نشط'
+      ];
+      tableRows.push(childData);
+    });
+    
+    // Add table to PDF
+    doc.autoTable({
+      head: [tableColumn],
+      body: tableRows,
+      startY: 25,
+      styles: { 
+        font: 'Arial',
+        fontStyle: 'normal',
+        textColor: [0, 0, 0],
+        halign: 'center',
+        cellPadding: 3,
+        lineWidth: 0.1
+      },
+      headStyles: {
+        fillColor: [41, 128, 185],
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        textDirection: 'rtl',
+        halign: 'center'
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      },
+      margin: { top: 30 },
+      didDrawPage: function (data) {
+        // Footer
+        const pageSize = doc.internal.pageSize;
+        const pageHeight = pageSize.height ? pageSize.height : pageSize.getHeight();
+        doc.text('© روضة الأطفال - جميع الحقوق محفوظة', data.settings.margin.left, pageHeight - 10);
+      }
+    });
+    
+    // Save the PDF
+    doc.save('قائمة_الأطفال.pdf');
+  };
+
+  // Debounced search handler
+  const handleSearchChange = debounce(({ name, value }) => {
+    switch (name) {
+      case 'name':
+        setSearchName(value);
+        break;
+      case 'class':
+        setSearchClass(value);
+        break;
+      case 'age':
+        setSearchAge(value);
+        break;
+      case 'parent':
+        setSearchParent(value);
+        break;
+      case 'health':
+        setSearchHealth(value);
+        break;
+      default:
+        break;
+    }
+  }, 300);
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      handleSearchChange.cancel();
+    };
+  }, [handleSearchChange]);
+
+  // Real-time listener for children data
+  useEffect(() => {
     setLoading(true);
     setError('');
-    try {
-      let url = 'http://localhost:5001/api/children';
-      const params = [];
-      if (searchName) params.push(`name=${encodeURIComponent(searchName)}`);
-      if (searchClass) params.push(`classId=${encodeURIComponent(searchClass)}`);
-      if (searchAge) params.push(`age=${encodeURIComponent(searchAge)}`);
-      if (searchParent) params.push(`parentName=${encodeURIComponent(searchParent)}`);
-      if (searchHealth) params.push(`health=${encodeURIComponent(searchHealth)}`);
-      if (params.length) url += '?' + params.join('&');
-      const res = await fetch(url, { headers: { Authorization: 'Bearer ' + token } });
-      const data = await res.json();
-      if (data.success) {
-        setChildren(data.children);
-      } else {
-        setError(data.message || t('حدث خطأ'));
+    
+    const childrenRef = collection(db, 'children');
+    const q = query(childrenRef, orderBy('createdAt', 'desc')); // Default ordering
+    
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const childrenData = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          childrenData.push({ 
+            id: doc.id, 
+            ...data,
+            // Ensure timestamps are properly converted
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : new Date(data.createdAt),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : new Date(data.updatedAt)
+          });
+        });
+        
+        setChildren(childrenData);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error in children listener:', error);
+        setError(t('حدث خطأ في تحديث بيانات الأطفال'));
+        setLoading(false);
       }
-    } catch (err) {
-      setError(t('Network error'));
-    } finally {
-      setLoading(false);
-    }
-  };
+    );
+    
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [t]);
 
+  // Real-time listener for classes
   useEffect(() => {
-    fetchChildren();
-    // eslint-disable-next-line
-  }, []);
+    const classesRef = collection(db, 'classes');
+    const q = query(classesRef, orderBy('name'));
+    
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const classesData = [];
+        querySnapshot.forEach((doc) => {
+          classesData.push({ 
+            id: doc.id, 
+            ...doc.data(),
+            // Ensure timestamps are properly converted
+            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
+          });
+        });
+        setClasses(classesData);
+      },
+      (error) => {
+        console.error('Error in classes listener:', error);
+        message.error(t('حدث خطأ في تحميل الفصول'));
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [t]);
 
+  // Real-time listener for teachers
+  useEffect(() => {
+    const teachersRef = collection(db, 'users');
+    const q = query(
+      teachersRef, 
+      where('role', '==', 'teacher'),
+      orderBy('name')
+    );
+    
+    const unsubscribe = onSnapshot(q, 
+      (querySnapshot) => {
+        const teachersData = [];
+        querySnapshot.forEach((doc) => {
+          teachersData.push({ 
+            id: doc.id, 
+            ...doc.data(),
+            // Ensure timestamps are properly converted
+            createdAt: doc.data().createdAt?.toDate ? doc.data().createdAt.toDate() : new Date(doc.data().createdAt)
+          });
+        });
+        setAllTeachers(teachersData);
+      },
+      (error) => {
+        console.error('Error in teachers listener:', error);
+        message.error(t('حدث خطأ في تحميل بيانات المعلمين'));
+      }
+    );
+    
+    return () => unsubscribe();
+  }, [t]);
+
+  // No need for manual data loading as we're using real-time listeners
+  // The listeners are set up in their respective useEffect hooks above
+
+  // Memoized search handler for form submission
   const handleSearch = (e) => {
     e.preventDefault();
-    fetchChildren();
+    // Trigger any pending debounced updates immediately
+    handleSearchChange.flush();
   };
 
-  const handleImageUpload = (e, type, imageType = 'image') => {
+  // Handle individual search input changes with debouncing
+  const handleSearchInputChange = (e) => {
+    const { name, value } = e.target;
+    handleSearchChange({ name, value });
+  };
+
+  // Compress image before upload
+  const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target.result;
+        
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          
+          // Calculate new dimensions
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          
+          // Set canvas dimensions
+          canvas.width = width;
+          canvas.height = height;
+          
+          // Draw and compress image
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Convert to blob with specified quality
+          canvas.toBlob(
+            (blob) => {
+              if (!blob) {
+                resolve(file); // Fallback to original if compression fails
+                return;
+              }
+              
+              // Create new file with compressed blob
+              const compressedFile = new File(
+                [blob],
+                file.name,
+                { type: 'image/jpeg', lastModified: Date.now() }
+              );
+              
+              resolve(compressedFile);
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+      };
+      
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleImageUpload = async (e, type, imageType = 'image') => {
     const file = e.target.files[0];
-    if (file) {
+    if (!file) return;
+    
+    // Validate file type
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!validTypes.includes(file.type)) {
+      message.error(t('نوع الملف غير مدعوم. يرجى تحميل صورة (JPEG, PNG, GIF, WebP)'));
+      return;
+    }
+    
+    // Validate file size (max 5MB)
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    if (file.size > maxSize) {
+      message.error(t('حجم الملف كبير جداً. الحد الأقصى 5 ميجابايت'));
+      return;
+    }
+    
+    try {
+      // Show loading state
+      message.loading(t('جاري معالجة الصورة...'), 0);
+      
+      // Compress image
+      const compressedFile = await compressImage(file);
+      
+      // Create preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        const update = {};
-        update[imageType] = file; // Store the file object for form submission
-        update[`${imageType}Preview`] = reader.result; // Store the data URL for preview
+        const update = {
+          [imageType]: compressedFile,
+          [`${imageType}Preview`]: reader.result,
+          [`${imageType}Name`]: compressedFile.name,
+          [`${imageType}Size`]: (compressedFile.size / 1024 / 1024).toFixed(2) + ' MB'
+        };
         
         if (type === 'add') {
-          setNewChild({ ...newChild, ...update });
+          setNewChild(prev => ({ ...prev, ...update }));
         } else {
-          setEditChild({ ...editChild, ...update });
+          setEditChild(prev => ({ ...prev, ...update }));
         }
+        
+        message.destroy();
+        message.success(t('تم تحميل الصورة بنجاح'));
       };
-      reader.readAsDataURL(file);
+      
+      reader.readAsDataURL(compressedFile);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      message.destroy();
+      message.error(t('حدث خطأ أثناء معالجة الصورة'));
     }
   };
 
-  const handleAddChild = async (values) => {
-    try {
-      const formData = new FormData();
-      formData.append('name', values.name);
-      formData.append('age', values.age);
-      formData.append('classId', values.classId);
-      if (values.parentIds) {
-        formData.append('parentIds', values.parentIds);
-      }
-      if (values.health) {
-        formData.append('health', values.health);
-      }
-      if (newChild.image) {
-        formData.append('image', newChild.image);
-      }
-      if (newChild.healthRecordImage) {
-        formData.append('healthRecordImage', newChild.healthRecordImage);
-      }
-      if (newChild.guardianAuthImage) {
-        formData.append('guardianAuthImage', newChild.guardianAuthImage);
-      }
-
-      const response = await fetch('http://localhost:5001/api/children', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+  // Upload file to Firebase Storage with progress tracking
+  const uploadFile = async (file, path) => {
+    if (!file) return '';
+    
+    const storageRef = ref(storage, `${path}/${Date.now()}_${file.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+    
+    return new Promise((resolve, reject) => {
+      uploadTask.on('state_changed',
+        (snapshot) => {
+          // Track upload progress
+          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+          console.log(`Upload is ${progress}% done`);
+          // You can add a progress indicator here if needed
         },
-        body: formData,
+        (error) => {
+          console.error('Upload error:', error);
+          reject(error);
+        },
+        async () => {
+          try {
+            const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+            resolve(downloadURL);
+          } catch (error) {
+            console.error('Error getting download URL:', error);
+            reject(error);
+          }
+        }
+      );
+    });
+  };
+
+  // Validate child data before submission
+  const validateChildData = (data) => {
+    const errors = [];
+    
+    // Required fields
+    if (!data.name || data.name.trim().length < 2) {
+      errors.push(t('يجب إدخال اسم صحيح للطفل (حرفان على الأقل)'));
+    }
+    
+    if (!data.classId) {
+      errors.push(t('يجب اختيار فصل للطفل'));
+    }
+    
+    // Age validation
+    const age = parseInt(data.age);
+    if (isNaN(age) || age < 1 || age > 18) {
+      errors.push(t('يجب إدخال عمر صحيح بين 1 و 18'));
+    }
+    
+    // Parent IDs validation
+    if (data.parentIds) {
+      const parentIds = data.parentIds.split(',').map(id => id.trim());
+      const invalidIds = parentIds.filter(id => !/^[a-zA-Z0-9]+$/.test(id));
+      
+      if (invalidIds.length > 0) {
+        errors.push(t('يجب أن تتكون أرقام أولياء الأمور من أحرف وأرقام فقط'));
+      }
+    }
+    
+    // Image validation (if required)
+    if (data.requireImage && !data.image) {
+      errors.push(t('يجب تحميل صورة للطفل'));
+    }
+    
+    return errors;
+  };
+
+  const handleAddChild = async () => {
+    // Validate form data
+    const validationErrors = validateChildData({
+      ...newChild,
+      requireImage: false // Set to true if image is required
+    });
+    
+    if (validationErrors.length > 0) {
+      setAddError(validationErrors.join('\n'));
+      return;
+    }
+
+    setAddLoading(true);
+    setAddError('');
+    
+    // Show loading message
+    const hideLoading = message.loading(t('جاري إضافة الطفل...'), 0);
+    
+    try {
+      // Upload files in parallel with error handling for each upload
+      const uploadPromises = [];
+      
+      if (newChild.image) {
+        uploadPromises.push(
+          uploadFile(newChild.image, 'children')
+            .then(url => ({ type: 'image', url }))
+            .catch(error => ({ type: 'image', error }))
+        );
+      } else {
+        uploadPromises.push(Promise.resolve({ type: 'image', url: '' }));
+      }
+      
+      if (newChild.healthRecordImage) {
+        uploadPromises.push(
+          uploadFile(newChild.healthRecordImage, 'health_records')
+            .then(url => ({ type: 'healthRecord', url }))
+            .catch(error => ({ type: 'healthRecord', error }))
+        );
+      } else {
+        uploadPromises.push(Promise.resolve({ type: 'healthRecord', url: '' }));
+      }
+      
+      if (newChild.guardianAuthImage) {
+        uploadPromises.push(
+          uploadFile(newChild.guardianAuthImage, 'guardian_auth')
+            .then(url => ({ type: 'guardianAuth', url }))
+            .catch(error => ({ type: 'guardianAuth', error }))
+        );
+      } else {
+        uploadPromises.push(Promise.resolve({ type: 'guardianAuth', url: '' }));
+      }
+      
+      // Wait for all uploads to complete
+      const uploadResults = await Promise.all(uploadPromises);
+      
+      // Check for upload errors
+      const uploadErrors = uploadResults
+        .filter(result => result.error)
+        .map(result => {
+          console.error(`Error uploading ${result.type}:`, result.error);
+          return t(`خطأ في تحميل ملف ${result.type}`);
+        });
+      
+      if (uploadErrors.length > 0) {
+        throw new Error(uploadErrors.join('\n'));
+      }
+      
+      // Extract URLs from successful uploads
+      const uploads = uploadResults.reduce((acc, result) => {
+        if (result.url) {
+          acc[`${result.type}Url`] = result.url;
+        }
+        return acc;
+      }, {});
+      
+      // Prepare child data with proper data types
+      const childData = {
+        name: newChild.name.trim(),
+        age: parseInt(newChild.age) || 0,
+        classId: newChild.classId,
+        parentIds: newChild.parentIds 
+          ? newChild.parentIds.split(',').map(id => id.trim()).filter(Boolean)
+          : [],
+        health: newChild.health?.trim() || '',
+        status: 'نشط',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...uploads
+      };
+      
+      // Add child to Firestore with error handling for Firestore operations
+      const docRef = await addDoc(collection(db, 'children'), childData);
+      
+      // Log the new child ID for debugging
+      console.log('Added child with ID:', docRef.id);
+      
+      // Show success message with the child's name
+      message.success(`${t('تمت إضافة الطفل')} "${childData.name}" ${t('بنجاح')}`);
+      
+      // Reset form
+      setShowAdd(false);
+      setNewChild({ 
+        name: '', 
+        age: '', 
+        classId: '', 
+        parentIds: '', 
+        image: null, 
+        healthRecordImage: null,
+        guardianAuthImage: null,
+        health: '' 
       });
       
-      const data = await response.json();
-      if (data.success) {
-        message.success(t('تمت إضافة الطفل بنجاح'));
-        setShowAdd(false);
-        setNewChild({ name: '', age: '', classId: '', parentIds: '', image: null, healthRecordImage: null, guardianAuthImage: null });
-        fetchChildren();
-      } else {
-        message.error(data.message || 'حدث خطأ أثناء إضافة الطفل');
+    } catch (err) {
+      console.error('Error in handleAddChild:', err);
+      
+      // More specific error messages
+      let errorMessage = t('حدث خطأ أثناء إضافة الطفل');
+      
+      if (err.code) {
+        switch (err.code) {
+          case 'storage/unauthorized':
+            errorMessage = t('ليس لديك صلاحية لتحميل الملفات');
+            break;
+          case 'storage/retry-limit-exceeded':
+            errorMessage = t('انتهت مهلة اتصال الخادم. يرجى المحاولة مرة أخرى');
+            break;
+          case 'permission-denied':
+            errorMessage = t('تم رفض الإذن. يرجى التأكد من الصلاحيات');
+            break;
+          default:
+            errorMessage = err.message || errorMessage;
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
       }
-    } catch (error) {
-      console.error('Error adding child:', error);
-      message.error('حدث خطأ أثناء إضافة الطفل');
+      
+      setAddError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      hideLoading();
+      setAddLoading(false);
     }
   };
 
   const handleEditChild = async (values) => {
+    setEditLoading(true);
+    setEditError('');
+    
     try {
-      setEditLoading(true);
-      const formData = new FormData();
-      formData.append('name', values.name);
-      formData.append('age', values.age);
-      formData.append('classId', values.classId);
-      if (values.parentIds) formData.append('parentIds', values.parentIds);
-      if (values.health) formData.append('health', values.health);
-
-      // Handle file uploads if any
-      if (editChild.image) formData.append('image', editChild.image);
-      if (editChild.healthRecordImage) formData.append('healthRecordImage', editChild.healthRecordImage);
-      if (editChild.guardianAuthImage) formData.append('guardianAuthImage', editChild.guardianAuthImage);
-      const res = await fetch(`http://localhost:5001/api/children/${editChild.id}`, {
-        method: 'PUT',
-        headers: {
-          Authorization: 'Bearer ' + token
-        },
-        body: formData
-      });
-      const data = await res.json();
-      if (data.success) {
-        setShowEdit(false);
-        setEditChild(null);
-        setSuccessMsg(t('تم تعديل الطفل بنجاح'));
-        fetchChildren();
-      } else {
-        setEditError(data.message || t('فشل التعديل'));
+      const updateData = {
+        name: values.name,
+        age: parseInt(values.age),
+        classId: values.classId,
+        parentIds: values.parentIds || '',
+        health: values.health || '',
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Handle file uploads if new files are provided
+      if (editChild.image) {
+        const imageRef = ref(storage, `children/${Date.now()}_${editChild.image.name}`);
+        await uploadBytes(imageRef, editChild.image);
+        updateData.imageUrl = await getDownloadURL(imageRef);
       }
-    } catch (err) {
-      setEditError(t('Network error'));
+      
+      if (editChild.healthRecordImage) {
+        const healthRef = ref(storage, `health_records/${Date.now()}_${editChild.healthRecordImage.name}`);
+        await uploadBytes(healthRef, editChild.healthRecordImage);
+        updateData.healthRecordUrl = await getDownloadURL(healthRef);
+      }
+      
+      if (editChild.guardianAuthImage) {
+        const authRef = ref(storage, `guardian_auth/${Date.now()}_${editChild.guardianAuthImage.name}`);
+        await uploadBytes(authRef, editChild.guardianAuthImage);
+        updateData.guardianAuthUrl = await getDownloadURL(authRef);
+      }
+      
+      // Update the document in Firestore
+      const childRef = doc(db, 'children', editChild.id);
+      await updateDoc(childRef, updateData);
+      
+      message.success(t('تم تحديث بيانات الطفل بنجاح'));
+      setShowEdit(false);
+      setEditChild(null);
+      // No need to fetch children as the real-time listener will update the UI
+    } catch (error) {
+      console.error('Error updating child:', error);
+      setEditError(t('حدث خطأ أثناء تحديث بيانات الطفل'));
     } finally {
       setEditLoading(false);
     }
   };
 
-  const handleDeleteChild = async (id) => {
+  const handleDeleteChild = async () => {
+    if (!deleteId) return;
+    
     setDeleteLoading(true);
-    setSuccessMsg('');
     try {
-      const res = await fetch(`http://localhost:5001/api/children/${id}`, {
-        method: 'DELETE',
-        headers: { Authorization: 'Bearer ' + token }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setSuccessMsg(t('تم حذف الطفل بنجاح'));
-        fetchChildren();
-      }
-    } catch (err) {}
-    setDeleteId(null);
-    setDeleteLoading(false);
+      // Delete the document from Firestore
+      await deleteDoc(doc(db, 'children', deleteId));
+      
+      message.success(t('تم حذف الطفل بنجاح'));
+      setDeleteId(null);
+      // No need to fetch children as the real-time listener will update the UI
+    } catch (error) {
+      console.error('Error deleting child:', error);
+      message.error(t('حدث خطأ أثناء حذف الطفل'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
-  // Filter children based on search criteria
-  const filteredChildren = children.filter(child => {
-    const matchesName = searchName ? child.name && child.name.toLowerCase().includes(searchName.toLowerCase()) : true;
-    const matchesClass = searchClass ? child.classId === searchClass : true;
-    const matchesAge = searchAge ? String(child.age) === searchAge : true;
-    const matchesParent = searchParent ? (child.parentNames?.join(',').toLowerCase().includes(searchParent.toLowerCase())) : true;
-    const matchesHealth = searchHealth ? (child.health && child.health.toLowerCase().includes(searchHealth.toLowerCase())) : true;
-    return matchesName && matchesClass && matchesAge && matchesParent && matchesHealth;
-  });
-
+  // ... (rest of the code remains the same)
   const handleSendMessageToParent = async (child) => {
     const parentId = child.parentIds[0]; // Assuming the first parent is the primary guardian
     if (!parentId) {
@@ -319,16 +781,90 @@ function ChildrenList() {
     <div style={{ maxWidth: '100%', margin: '40px auto', padding: 24, fontFamily: 'Tajawal, Arial, sans-serif' }}>
       <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: i18n.language === 'ar' ? 'right' : 'left', fontFamily: 'Tajawal, Arial, sans-serif' }}>{t('Children Management')}</h2>
       {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
-      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start' }}>
-        <Input placeholder={t('Search by Name')} value={searchName} onChange={e => setSearchName(e.target.value)} style={{ width: 160 }} />
-        <Input placeholder={t('Search by Class')} value={searchClass} onChange={e => setSearchClass(e.target.value)} style={{ width: 120 }} />
-        <Input placeholder={t('Age')} value={searchAge} onChange={e => setSearchAge(e.target.value)} style={{ width: 80 }} />
-        <Input placeholder={t('Parent')} value={searchParent} onChange={e => setSearchParent(e.target.value)} style={{ width: 140 }} />
-        <Input placeholder={t('Health Status')} value={searchHealth} onChange={e => setSearchHealth(e.target.value)} style={{ width: 120 }} />
-        <Button type="primary" onClick={fetchChildren}>{t('Search')}</Button>
-        <Button onClick={() => { setSearchName(''); setSearchClass(''); setSearchAge(''); setSearchParent(''); setSearchHealth(''); fetchChildren(); }}>{t('Reset')}</Button>
-        <Button type="primary" style={{ marginLeft: 'auto' }} onClick={() => setShowAdd(true)}>{t('Add Child')}</Button>
+      
+      {/* Search and Filter Section */}
+      <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <Input 
+            placeholder={t('Search by name')} 
+            name="name"
+            value={searchName} 
+            onChange={handleSearchInputChange} 
+            style={{ width: 200, marginRight: 8 }} 
+            allowClear
+          />
+          <Input 
+            placeholder={t('Search by class')} 
+            name="class"
+            value={searchClass} 
+            onChange={handleSearchInputChange} 
+            style={{ width: 150, marginRight: 8 }} 
+            allowClear
+          />
+          <Input 
+            placeholder={t('Search by age')} 
+            name="age"
+            value={searchAge} 
+            onChange={handleSearchInputChange} 
+            style={{ width: 120, marginRight: 8 }} 
+            type="number"
+            min="1"
+            max="18"
+            allowClear
+          />
+          <Input 
+            placeholder={t('Search by parent')} 
+            name="parent"
+            value={searchParent} 
+            onChange={handleSearchInputChange} 
+            style={{ width: 200, marginRight: 8 }} 
+            allowClear
+          />
+          <Input 
+            placeholder={t('Search by health')} 
+            name="health"
+            value={searchHealth} 
+            onChange={handleSearchInputChange} 
+            style={{ width: 180, marginRight: 16 }} 
+            allowClear
+          />
+          <Button type="primary" onClick={handleSearch}>{t('Search')}</Button>
+          <Button onClick={() => { 
+            setSearchName(''); 
+            setSearchClass(''); 
+            setSearchAge(''); 
+            setSearchParent(''); 
+            setSearchHealth(''); 
+            // Reset will automatically trigger a re-render with the cleared filters
+          }}>
+            {t('Reset')}
+          </Button>
+        </div>
+        <div>
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'pdf',
+                  icon: <FilePdfOutlined />,
+                  label: t('Export as PDF'),
+                  onClick: exportToPDF
+                }
+              ]
+            }}
+            trigger={['click']}
+          >
+            <Button type="primary" style={{ marginRight: 8 }}>
+              {t('Export')} <DownOutlined />
+            </Button>
+          </Dropdown>
+          <Button type="primary" onClick={() => setShowAdd(true)}>
+            {t('Add Child')}
+          </Button>
+        </div>
       </div>
+
+      {/* Add Child Modal */}
       {showAdd && (
         <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
           <div style={{ background: '#fff', padding: 32, borderRadius: 8, minWidth: 350, position: 'relative' }}>
@@ -500,60 +1036,72 @@ function ChildrenList() {
               </tr>
             </thead>
             <tbody>
-              {filteredChildren.map(child => (
-                <tr key={child.id} style={{ borderBottom: '1px solid #e3eaf2' }}>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{child.image ? <img src={child.image} alt={t('Child Image')} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 1px 4px #b0bec5' }} /> : '-'}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{child.name}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{child.age}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    {child.classId ? <Badge color={child.classId === 'A' ? 'blue' : child.classId === 'B' ? 'orange' : 'green'} text={child.classId} /> : '-'}
-                  </td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>{child.parentNames?.join(', ')}</td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    {child.health ? <Badge color={child.health === 'سليم' || child.health === 'صحي' ? 'green' : 'orange'} text={child.health} /> : '-'}
-                  </td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    {child.healthRecordImage ? (
-                      <img 
-                        src={child.healthRecordImage} 
-                        alt="Health Record" 
-                        style={{ 
-                          width: '50px', 
-                          height: '50px', 
-                          objectFit: 'cover',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => window.open(child.healthRecordImage, '_blank')}
-                      />
-                    ) : 'غير متوفر'}
-                  </td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    {child.guardianAuthImage ? (
-                      <img 
-                        src={child.guardianAuthImage} 
-                        alt="Guardian Authorization" 
-                        style={{ 
-                          width: '50px', 
-                          height: '50px', 
-                          objectFit: 'cover',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => window.open(child.guardianAuthImage, '_blank')}
-                      />
-                    ) : 'غير متوفر'}
-                  </td>
-                  <td style={{ textAlign: 'center', padding: 8 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-                      <Button type="link" icon={<EditOutlined />} style={{ color: '#1976d2', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => { setEditChild({ ...child, parentIds: (child.parentIds || []).join(','), newImage: null }); setShowEdit(true); }}>تعديل</Button>
-                      <Button type="link" icon={<DeleteOutlined />} danger style={{ fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => setDeleteId(child.id)}>حذف</Button>
-                      <Button type="link" icon={<FileTextOutlined />} style={{ color: '#43a047', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => navigate(`/reports/${child.id}`)}>التقارير</Button>
-                      {child.parentIds && child.parentIds.length > 0 && (
-                        <Button type="link" icon={<MessageOutlined />} style={{ color: '#ff9800', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => handleSendMessageToParent(child)}>إرسال رسالة</Button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredChildren.map((child) => {
+                const childClass = classes && child.classId ? classes.find((cls) => cls.id === child.classId) : null;
+                const teacherName = childClass && Array.isArray(childClass.teacherIds) && childClass.teacherIds.length > 0
+                  ? allTeachers && allTeachers.length > 0
+                    ? (() => {
+                        const teacher = allTeachers.find((t) => t.id === childClass.teacherIds[0]);
+                        return teacher ? teacher.name : childClass.teacherIds[0];
+                      })()
+                    : childClass.teacherIds[0]
+                  : '-';
+                
+                return (
+                  <tr key={child.id} style={{ borderBottom: '1px solid #e3eaf2' }}>
+                    <td style={{ textAlign: 'center', padding: 8 }}>{child.image ? <img src={child.image} alt={t('Child Image')} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 1px 4px #b0bec5' }} /> : '-'}</td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>{child.name}</td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>{child.age}</td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>
+                      {childClass ? <Badge color={childClass.id === 'A' ? 'blue' : childClass.id === 'B' ? 'orange' : 'green'} text={childClass.name} /> : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>{teacherName}</td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>
+                      {child.health ? <Badge color={child.health === 'سليم' || child.health === 'صحي' ? 'green' : 'orange'} text={child.health} /> : '-'}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>
+                      {child.healthRecordImage ? (
+                        <img 
+                          src={child.healthRecordImage} 
+                          alt="Health Record" 
+                          style={{ 
+                            width: '50px', 
+                            height: '50px', 
+                            objectFit: 'cover',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => window.open(child.healthRecordImage, '_blank')}
+                        />
+                      ) : 'غير متوفر'}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>
+                      {child.guardianAuthImage ? (
+                        <img 
+                          src={child.guardianAuthImage} 
+                          alt="Guardian Authorization" 
+                          style={{ 
+                            width: '50px', 
+                            height: '50px', 
+                            objectFit: 'cover',
+                            cursor: 'pointer'
+                          }}
+                          onClick={() => window.open(child.guardianAuthImage, '_blank')}
+                        />
+                      ) : 'غير متوفر'}
+                    </td>
+                    <td style={{ textAlign: 'center', padding: 8 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                        <Button type="link" icon={<EditOutlined />} style={{ color: '#1976d2', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => { setEditChild({ ...child, parentIds: (child.parentIds || []).join(','), newImage: null }); setShowEdit(true); }}>تعديل</Button>
+                        <Button type="link" icon={<DeleteOutlined />} danger style={{ fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => setDeleteId(child.id)}>حذف</Button>
+                        <Button type="link" icon={<FileTextOutlined />} style={{ color: '#43a047', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => navigate(`/reports/${child.id}`)}>التقارير</Button>
+                        {child.parentIds && child.parentIds.length > 0 && (
+                          <Button type="link" icon={<MessageOutlined />} style={{ color: '#ff9800', fontWeight: 600, width: '100%', textAlign: 'right' }} onClick={() => handleSendMessageToParent(child)}>إرسال رسالة</Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -562,4 +1110,4 @@ function ChildrenList() {
   );
 }
 
-export default ChildrenList; 
+export default ChildrenList;
