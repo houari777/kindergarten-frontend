@@ -15,14 +15,14 @@ module.exports = {
         url: require.resolve('url/'),
         assert: require.resolve('assert/'),
         buffer: require.resolve('buffer/'),
-        path: require.resolve('path-browserify'),
-        process: require.resolve('process/browser')
+        path: require.resolve('path-browserify')
       };
 
       // Add plugins for global variables
+      webpackConfig.plugins = webpackConfig.plugins || [];
       webpackConfig.plugins.push(
         new webpack.ProvidePlugin({
-          process: 'process/browser',
+          process: 'process/browser.js',
           Buffer: ['buffer', 'Buffer']
         })
       );
@@ -31,8 +31,15 @@ module.exports = {
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         'fs': false,
-        'process': 'process/browser'
+        'process': 'process/browser.js'
       };
+
+      // Add process module
+      webpackConfig.plugins.push(
+        new webpack.ProvidePlugin({
+          process: 'process/browser.js',
+        })
+      );
 
       return webpackConfig;
     }
