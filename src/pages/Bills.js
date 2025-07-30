@@ -1,22 +1,33 @@
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
+import React, { useState, useEffect } from 'react';
 import { 
-  Button, 
   Table, 
-  Modal, 
-  Form, 
+  Button, 
   Input, 
   Select, 
+  Form, 
   DatePicker, 
   message, 
+  Space, 
+  Modal, 
   Popconfirm, 
   Badge, 
   Spin 
 } from 'antd';
+import { 
+  SearchOutlined, 
+  FilePdfOutlined, 
+  FileExcelOutlined, 
+  PlusOutlined, 
+  EditOutlined, 
+  DeleteOutlined 
+} from '@ant-design/icons';
+import axios from 'axios';
 import moment from 'moment';
-import * as XLSX from 'xlsx';
+import 'moment/locale/ar';
+import 'moment/locale/fr';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;

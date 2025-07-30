@@ -1,60 +1,49 @@
 import React, { useState, useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
 import { 
-  Table, 
   Button, 
   Input, 
-  Space, 
-  Card, 
-  Typography, 
-  Avatar, 
-  Tag, 
-  message,
-  Modal,
-  Form,
-  Select,
+  Select, 
+  Form, 
+  message, 
+  Modal, 
+  Table,
+  Tag,
+  Space,
   Upload,
   Row,
   Col,
-  Badge,
-  Dropdown,
-  Menu
+  Card,
+  Avatar
 } from 'antd';
 import { 
   PlusOutlined, 
   SearchOutlined, 
-  EditOutlined, 
-  DeleteOutlined, 
-  UserOutlined,
+  UserOutlined, 
   UploadOutlined,
-  FileTextOutlined,
-  MessageOutlined,
-  FilePdfOutlined,
-  DownOutlined
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
-import debounce from 'lodash/debounce';
-import { db } from '../firebase/config';
+import { useTranslation } from 'react-i18next';
+import { db, storage } from '../firebase/config';
 import { 
   collection, 
-  query, 
-  where, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
   doc, 
-  deleteDoc, 
+  getDocs, 
   getDoc, 
-  orderBy, 
-  onSnapshot, 
-  serverTimestamp 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  where,
+  addDoc,
+  orderBy,
+  onSnapshot,
+  serverTimestamp
 } from 'firebase/firestore';
-import { storage } from '../firebase/config';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-const { Title, Text } = Typography;
 const { Option } = Select;
 
 function ChildrenList() {
@@ -723,7 +712,6 @@ function ChildrenList() {
     }
   };
 
-  // ... (rest of the code remains the same)
   const handleSendMessageToParent = async (child) => {
     const parentId = child.parentIds[0]; // Assuming the first parent is the primary guardian
     if (!parentId) {
