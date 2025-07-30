@@ -5,7 +5,9 @@ import {
   Select, 
   Form, 
   message, 
-  Modal, 
+  Badge,
+  Dropdown,
+  Menu,
   Table,
   Tag,
   Space,
@@ -13,7 +15,8 @@ import {
   Row,
   Col,
   Card,
-  Avatar
+  Avatar,
+  TextArea
 } from 'antd';
 import { 
   PlusOutlined, 
@@ -21,7 +24,11 @@ import {
   UserOutlined, 
   UploadOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  FileTextOutlined,
+  MessageOutlined,
+  DownOutlined,
+  FilePdfOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -41,8 +48,10 @@ import {
   serverTimestamp
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { v4 as uuidv4 } from 'uuid';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import debounce from 'lodash/debounce';
 
 const { Option } = Select;
 
