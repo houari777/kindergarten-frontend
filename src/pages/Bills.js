@@ -21,11 +21,6 @@ import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
 
-const statusColors = {
-  paid: 'green',
-  unpaid: 'red',
-};
-
 function Bills() {
   const { t, i18n } = useTranslation();
   const [bills, setBills] = useState([]);
@@ -350,4 +345,4 @@ function Bills() {
   );
 };
 
-export default Bills; 
+export default Bills;

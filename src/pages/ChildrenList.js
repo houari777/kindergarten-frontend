@@ -60,7 +60,6 @@ const { Option } = Select;
 function ChildrenList() {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const [form] = Form.useForm();
   const token = localStorage.getItem('token');
   
   // Data state
@@ -101,7 +100,6 @@ function ChildrenList() {
   // Delete state
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [successMsg, setSuccessMsg] = useState('');
 
   // Memoize the class name lookup for better performance
   const getClassName = (classId) => {
@@ -759,28 +757,9 @@ function ChildrenList() {
     }
   };
 
-  const handleEditClick = (child) => {
-    setEditChild({
-      id: child.id,
-      name: child.name,
-      age: child.age,
-      classId: child.classId,
-      parentIds: child.parentIds ? child.parentIds.join(',') : '',
-      health: child.health || '',
-      image: null,
-      existingImage: child.image || null,
-      healthRecordImage: null,
-      existingHealthRecordImage: child.healthRecordImage || null,
-      guardianAuthImage: null,
-      existingGuardianAuthImage: child.guardianAuthImage || null
-    });
-    setShowEdit(true);
-  };
-
   return (
     <div style={{ maxWidth: '100%', margin: '40px auto', padding: 24, fontFamily: 'Tajawal, Arial, sans-serif' }}>
       <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: i18n.language === 'ar' ? 'right' : 'left', fontFamily: 'Tajawal, Arial, sans-serif' }}>{t('Children Management')}</h2>
-      {successMsg && <div style={{ color: 'green', marginBottom: 12 }}>{successMsg}</div>}
       
       {/* Search and Filter Section */}
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -958,7 +937,7 @@ function ChildrenList() {
                     <img 
                       src={editChild.existingImage} 
                       alt="Current" 
-                      style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover' }} 
+                      style={{ width: 50, height: 50, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 1px 4px #b0bec5' }} 
                     />
                   </div>
                 )}
