@@ -15,11 +15,21 @@ module.exports = {
         url: require.resolve('url/'),
         assert: require.resolve('assert/'),
         buffer: require.resolve('buffer/'),
-        path: require.resolve('path-browserify')
+        path: require.resolve('path-browserify'),
+        process: require.resolve('process/browser.js')
       };
 
-      // Add plugins for global variables
+      // Initialize plugins array if it doesn't exist
       webpackConfig.plugins = webpackConfig.plugins || [];
+      
+      // Add DefinePlugin to define process.env.NODE_ENV
+      webpackConfig.plugins.push(
+        new webpack.DefinePlugin({
+          'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV || 'production'),
+        })
+      );
+
+      // Add ProvidePlugin for process and Buffer
       webpackConfig.plugins.push(
         new webpack.ProvidePlugin({
           process: 'process/browser.js',
@@ -27,19 +37,16 @@ module.exports = {
         })
       );
 
-      // Fix for fs module
+      // Fix for fs module and Firebase
       webpackConfig.resolve.alias = {
         ...webpackConfig.resolve.alias,
         'fs': false,
-        'process': 'process/browser.js'
+        'process': 'process/browser.js',
+        '@firebase/app': require.resolve('@firebase/app'),
+        '@firebase/firestore': require.resolve('@firebase/firestore'),
+        '@firebase/storage': require.resolve('@firebase/storage'),
+        '@firebase/auth': require.resolve('@firebase/auth')
       };
-
-      // Add process module
-      webpackConfig.plugins.push(
-        new webpack.ProvidePlugin({
-          process: 'process/browser.js',
-        })
-      );
 
       return webpackConfig;
     }

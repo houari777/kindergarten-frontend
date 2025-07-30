@@ -1,32 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Table, 
-  Button, 
-  Input, 
-  Select, 
-  Form, 
-  DatePicker, 
-  message, 
-  Space, 
-  Modal, 
-  Popconfirm, 
-  Badge 
-} from 'antd';
-import { 
-  SearchOutlined, 
-  FilePdfOutlined, 
-  FileExcelOutlined, 
-  PlusOutlined, 
-  EditOutlined, 
-  DeleteOutlined 
-} from '@ant-design/icons';
+import { Table, Button, Input, Select, Form, DatePicker, message } from 'antd';
 import axios from 'axios';
 import moment from 'moment';
 import 'moment/locale/ar';
 import 'moment/locale/fr';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
@@ -48,7 +27,6 @@ function Bills() {
     fetchBills();
     fetchChildren();
     fetchParents();
-    // eslint-disable-next-line
   }, []);
 
   const fetchBills = async (params = {}) => {
@@ -59,8 +37,9 @@ function Bills() {
         params,
       });
       setBills(res.data.bills || []);
-    } catch (err) {
-      message.error(t('Network error'));
+    } catch (error) {
+      console.error('Error fetching bills:', error);
+      message.error(t('Failed to fetch bills'));
     }
     setLoading(false);
   };
@@ -114,7 +93,7 @@ function Bills() {
       });
       message.success(t('Bill deleted successfully'));
       fetchBills(filters);
-    } catch (err) {
+    } catch (error) {
       message.error(t('Network error'));
     }
     setLoading(false);
@@ -142,7 +121,7 @@ function Bills() {
       }
       setIsModalVisible(false);
       fetchBills(filters);
-    } catch (err) {
+    } catch (error) {
       message.error(t('Network error'));
     }
     setLoading(false);
@@ -154,7 +133,6 @@ function Bills() {
     fetchBills(newFilters);
   };
 
-  // تصدير إلى Excel
   const exportToExcel = () => {
     const exportData = bills.map(bill => ({
       الطفل: children.find(c => c.id === bill.childId)?.name || '-',
@@ -171,7 +149,6 @@ function Bills() {
     XLSX.writeFile(wb, 'bills.xlsx');
   };
 
-  // تصدير إلى PDF
   const exportToPDF = () => {
     const doc = new jsPDF();
     const exportData = bills.map(bill => [
@@ -228,7 +205,7 @@ function Bills() {
       title: t('Status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status) => <Badge color={status === 'paid' ? 'green' : 'red'} text={status === 'paid' ? t('Paid') : t('Unpaid')} />,
+      render: (status) => <span style={{ color: status === 'paid' ? 'green' : 'red' }}>{status === 'paid' ? t('Paid') : t('Unpaid')}</span>,
     },
     {
       title: 'تاريخ الدفع',
@@ -248,11 +225,9 @@ function Bills() {
           <Button type="link" onClick={() => handleEdit(bill)}>
             {t('Edit')}
           </Button>
-          <Popconfirm title="هل أنت متأكد من الحذف؟" onConfirm={() => handleDelete(bill.id)} okText="نعم" cancelText="لا">
-            <Button type="link" danger>
-              {t('Delete')}
-            </Button>
-          </Popconfirm>
+          <Button type="link" danger onClick={() => handleDelete(bill.id)}>
+            {t('Delete')}
+          </Button>
         </>
       ),
     },
