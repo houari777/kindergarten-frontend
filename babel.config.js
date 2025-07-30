@@ -29,7 +29,9 @@ module.exports = function(api) {
     fixReactUse,
     ['module-resolver', {
       root: ['./src'],
+      extensions: ['.js', '.jsx', '.ts', '.tsx'],
       alias: {
+        '^@/(.+)': './src/\\1',
         'react': './node_modules/react',
         'react-dom': './node_modules/react-dom'
       }
@@ -40,4 +42,19 @@ module.exports = function(api) {
     presets,
     plugins
   };
+};
+
+module.exports = {
+  presets: ['@babel/preset-react'],
+  plugins: [
+    ['module-resolver', {
+      root: ['./src'],
+      extensions: ['.js', '.jsx', '.ts', '.tsx'],
+      alias: {
+        '^@/(.+)': './src/\\1',
+        'react': './node_modules/react',
+        'react-dom': './node_modules/react-dom'
+      }
+    }]
+  ]
 };
