@@ -2,12 +2,13 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
 import { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
+
 import { Table, Button, Modal, Form, Input, Select, message, DatePicker } from 'antd';
 import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
-import { useColumns } from './columns';
+
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
+import {useAuth} from "contexts/AuthContext";
 
 const Users = () => {
   const { t } = useTranslation();

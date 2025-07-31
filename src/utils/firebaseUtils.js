@@ -13,7 +13,7 @@ import {
   startAfter,
   serverTimestamp
 } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from 'firebase/config';
 
 /**
  * Generic function to get a document by ID

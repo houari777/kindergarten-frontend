@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { useAuth } from '../contexts/AuthContext';
+import { auth } from 'firebase/config';
+import { useAuth } from 'contexts/AuthContext';
 
 function Login() {
   const { t, i18n } = useTranslation();

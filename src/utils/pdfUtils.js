@@ -1,4 +1,4 @@
-import { amiriFont } from '../assets/fonts/amiriFont';
+import { amiriFont } from 'assets/fonts/amiriFont';
 
 // Initialize pdfmake with custom configuration
 export async function initializePdfMake() {

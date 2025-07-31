@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from 'firebase/config';
 import { message } from 'antd';
 
 function UsersList() {

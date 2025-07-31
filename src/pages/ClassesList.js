@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { Button, Modal, Spin, Select, message } from 'antd';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from 'firebase/config';
 
 function ClassesList() {
   const [classes, setClasses] = useState([]);

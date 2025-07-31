@@ -6,7 +6,7 @@ import {
   updateDocument, 
   deleteDocument,
   getDocumentByField
-} from '../utils/firebaseUtils';
+} from 'utils/firebaseUtils';
 
 /**
  * Custom hook for fetching a single document from Firestore

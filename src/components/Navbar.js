@@ -2,8 +2,8 @@ import React from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { signOut } from 'firebase/auth';
-import { auth } from '../firebase/config';
-import { useAuth } from '../contexts/AuthContext';
+import { auth } from 'firebase/config';
+import { useAuth } from 'contexts/AuthContext';
 
 function Navbar() {
   const navigate = useNavigate();

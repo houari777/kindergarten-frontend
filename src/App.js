@@ -13,7 +13,7 @@ import Bills from './pages/Bills';
 import Notifications from './pages/Notifications';
 import TeachersList from './pages/TeachersList';
 import Unauthorized from './pages/Unauthorized';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider } from 'contexts/AuthContext';
 
 function App() {
   return (

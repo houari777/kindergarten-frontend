@@ -3,11 +3,11 @@ import { useParams } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs, getDoc } from 'firebase/firestore';
-import { db } from '../firebase/config';
+import { db } from 'firebase/config';
 import { message } from 'antd';
 
 // Import our Arabic PDF utility
-import { loadFonts } from '../utils/arabicFonts';
+import { loadFonts } from 'utils/arabicFonts';
 
 function ChildReports() {
   const { t, i18n } = useTranslation();

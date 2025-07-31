@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
-import { auth } from '../firebase/config';
+import { auth } from 'firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
-import { getCurrentUser } from '../firebase/auth';
+import { getCurrentUser } from 'firebase/auth';
 
 export const AppContext = createContext();
 

@@ -13,7 +13,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { db } from '../../firebase';
+
 import { 
   collection, 
   query, 
@@ -22,6 +22,7 @@ import {
   deleteDoc,
   getDoc
 } from 'firebase/firestore';
+import {db} from "firebase/config";
 
 const ChildrenList = () => {
   const [children, setChildren] = useState([]);
