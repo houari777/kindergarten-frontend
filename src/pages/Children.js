@@ -1,4 +1,1 @@
-import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
- 
+// This file is intentionally left blank as it's not currently in use.

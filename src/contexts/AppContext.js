@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import { auth } from '../firebase/config';
 import { onAuthStateChanged } from 'firebase/auth';
 import { getCurrentUser } from '../firebase/auth';
@@ -85,3 +86,9 @@ export const AppProvider = ({ children }) => {
     </AppContext.Provider>
   );
 };
+
+AppProvider.propTypes = {
+  children: PropTypes.node.isRequired
+};
+
+export default AppProvider;

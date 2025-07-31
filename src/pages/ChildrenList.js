@@ -1,201 +1,126 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Button, 
   Input, 
-  Select, 
-  Form, 
-  message, 
-  Badge,
-  Dropdown,
-  Table,
-  Space,
-  Card,
-  Avatar
+  Table, 
+  Space, 
+  Card, 
+  Modal, 
+  message
 } from 'antd';
 import { 
-  FileTextOutlined,
-  MessageOutlined,
-  DownOutlined,
-  FilePdfOutlined
+  MessageOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { db, storage } from '../../firebase';
+import { db } from '../../firebase';
 import { 
   collection, 
   query, 
-  where,
   getDocs,
   doc,
-  getDoc,
-  updateDoc,
   deleteDoc,
-  addDoc,
-  orderBy,
-  serverTimestamp
+  getDoc
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import debounce from 'lodash/debounce';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
-const { Option } = Select;
-
-function ChildrenList() {
-  const { t, i18n } = useTranslation();
-  const navigate = useNavigate();
-  
-  // Data state
+const ChildrenList = () => {
   const [children, setChildren] = useState([]);
-  const [classes, setClasses] = useState([]);
-  const [parents, setParents] = useState([]);
-  const [loading, setLoading] = useState(true);
-  
-  // Modal states
-  const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isDeleteModalVisible, setIsDeleteModalVisible] = useState(false);
-  
-  // Form state
-  const [form] = Form.useForm();
-  const [editingChild, setEditingChild] = useState(null);
-  
-  // Search and filter states
+  const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [classFilter, setClassFilter] = useState('');
-  
-  // Delete state
   const [deleteId, setDeleteId] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  
+  const navigate = useNavigate();
+  const { t } = useTranslation();
 
-  // Fetch data on component mount
-  useEffect(() => {
-    fetchChildren();
-    fetchClasses();
-    fetchParents();
-  }, []);
-
-  const fetchChildren = async () => {
+  const fetchChildren = useCallback(async () => {
     setLoading(true);
     try {
-      const q = query(collection(db, 'enfants'), orderBy('name'));
-      const querySnapshot = await getDocs(q);
-      const childrenData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const childrenQuery = query(collection(db, 'enfants'));
+      const querySnapshot = await getDocs(childrenQuery);
+      const childrenData = [];
+      
+      for (const doc of querySnapshot.docs) {
+        const childData = { id: doc.id, ...doc.data() };
+        
+        // Fetch class name if classId exists
+        if (childData.classeId) {
+          const classDoc = await getDoc(doc(db, 'classes', childData.classeId));
+          if (classDoc.exists()) {
+            childData.className = classDoc.data().nom;
+          }
+        }
+        
+        childrenData.push(childData);
+      }
+      
       setChildren(childrenData);
     } catch (error) {
       console.error('Error fetching children:', error);
-      message.error(t('Failed to fetch children'));
+      message.error(t('error.fetchingChildren'));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  };
+  }, [t]);
 
-  const fetchClasses = async () => {
-    try {
-      const q = query(collection(db, 'classes'));
-      const querySnapshot = await getDocs(q);
-      const classesData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setClasses(classesData);
-    } catch (error) {
-      console.error('Error fetching classes:', error);
-    }
-  };
-
-  const fetchParents = async () => {
-    try {
-      const q = query(collection(db, 'parents'));
-      const querySnapshot = await getDocs(q);
-      const parentsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setParents(parentsData);
-    } catch (error) {
-      console.error('Error fetching parents:', error);
-    }
-  };
-
-  // Handle search with debounce
-  const handleSearch = debounce((value) => {
-    setSearchText(value);
-  }, 300);
-
-  // Filter children based on search and filters
-  const filteredChildren = children.filter(child => {
-    const matchesSearch = child.name?.toLowerCase().includes(searchText.toLowerCase()) || 
-                         child.id?.includes(searchText);
-    const matchesClass = !classFilter || child.classId === classFilter;
-    return matchesSearch && matchesClass;
-  });
-
-  // Handle delete child
   const handleDelete = async () => {
     if (!deleteId) return;
     
     setDeleteLoading(true);
     try {
       await deleteDoc(doc(db, 'enfants', deleteId));
-      message.success(t('Child deleted successfully'));
+      message.success(t('child.deletedSuccessfully'));
       fetchChildren();
-      setIsDeleteModalVisible(false);
     } catch (error) {
       console.error('Error deleting child:', error);
-      message.error(t('Failed to delete child'));
+      message.error(t('error.deletingChild'));
+    } finally {
+      setDeleteId(null);
+      setDeleteLoading(false);
     }
-    setDeleteLoading(false);
   };
 
-  // Table columns
+  useEffect(() => {
+    fetchChildren();
+  }, [fetchChildren]);
+
+  const filteredChildren = children.filter(child => {
+    const matchesSearch = child.nom?.toLowerCase().includes(searchText.toLowerCase()) ||
+                        child.prenom?.toLowerCase().includes(searchText.toLowerCase());
+    return matchesSearch;
+  });
+
   const columns = [
     {
-      title: t('Name'),
-      dataIndex: 'name',
+      title: t('common.name'),
+      dataIndex: 'nom',
       key: 'name',
-      render: (text, record) => (
-        <Space>
-          <Avatar 
-            src={record.photoURL} 
-            icon={<FileTextOutlined />} 
-          />
-          {text}
-        </Space>
-      ),
+      render: (_, record) => `${record.prenom} ${record.nom}`
     },
     {
-      title: t('Class'),
-      dataIndex: 'classId',
+      title: t('common.class'),
+      dataIndex: 'className',
       key: 'class',
-      render: (classId) => {
-        const classInfo = classes.find(c => c.id === classId);
-        return classInfo?.name || '-';
-      },
+      render: (className) => className || t('common.notAssigned')
     },
     {
-      title: t('Status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status) => (
-        <Badge 
-          status={status === 'active' ? 'success' : 'default'} 
-          text={status === 'active' ? t('Active') : t('Inactive')} 
-        />
-      ),
-    },
-    {
-      title: t('Actions'),
+      title: t('common.actions'),
       key: 'actions',
       render: (_, record) => (
         <Space size="middle">
           <Button 
-            type="text" 
+            type="primary" 
             icon={<MessageOutlined />} 
             onClick={() => navigate(`/child/${record.id}/reports`)}
           >
-            {t('Reports')}
+            {t('common.reports')}
+          </Button>
+          <Button 
+            danger
+            onClick={() => setDeleteId(record.id)}
+            loading={deleteLoading && deleteId === record.id}
+          >
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -203,60 +128,36 @@ function ChildrenList() {
   ];
 
   return (
-    <div style={{ 
-      maxWidth: '100%', 
-      margin: '40px auto', 
-      padding: 24, 
-      fontFamily: 'Tajawal, Arial, sans-serif' 
-    }}>
-         <Card>
-        <div style={{ marginBottom: 16 }}>
-          <Space>
-            <Input
-              placeholder={t('Search children...')}
-              onChange={(e) => handleSearch(e.target.value)}
-              style={{ width: 200 }}
-            />
-            <Select
-              placeholder={t('Filter by class')}
-              style={{ width: 200 }}
-              onChange={setClassFilter}
-              allowClear
-            >
-              {classes.map(cls => (
-                <Option key={cls.id} value={cls.id}>
-                  {cls.name}
-                </Option>
-              ))}
-            </Select>
-          </Space>
-        </div>
-
-        <Table
-          columns={columns}
-          dataSource={filteredChildren}
-          rowKey="id"
-          loading={loading}
-          scroll={{ x: true }}
-          pagination={{ pageSize: 10 }}
+    <Card 
+      title={t('children.title')}
+      extra={
+        <Input
+          placeholder={t('common.search')}
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          style={{ width: 200 }}
         />
-      </Card>
-
-      {/* Delete Confirmation Modal */}
+      }
+    >
+      <Table
+        columns={columns}
+        dataSource={filteredChildren}
+        rowKey="id"
+        loading={loading}
+        pagination={{ pageSize: 10 }}
+      />
+      
       <Modal
-        title={t('Confirm Delete')}
-        open={isDeleteModalVisible}
+        title={t('common.confirmDelete')}
+        open={!!deleteId}
         onOk={handleDelete}
+        onCancel={() => setDeleteId(null)}
         confirmLoading={deleteLoading}
-        onCancel={() => setIsDeleteModalVisible(false)}
-        okText={t('Delete')}
-        cancelText={t('Cancel')}
-        okButtonProps={{ danger: true }}
       >
-        <p>{t('Are you sure you want to delete this child? This action cannot be undone.')}</p>
+        <p>{t('child.confirmDelete')}</p>
       </Modal>
-    </div>
+    </Card>
   );
-}
+};
 
 export default ChildrenList;

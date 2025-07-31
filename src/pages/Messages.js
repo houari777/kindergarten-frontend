@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
-import { useTranslation } from 'react-i18next';
 
 function Messages() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const [users, setUsers] = useState([]);
   const [role, setRole] = useState('parent');
   const [recipient, setRecipient] = useState('all');
@@ -174,4 +174,4 @@ function Messages() {
   );
 }
 
-export default Messages; 
+export default Messages;

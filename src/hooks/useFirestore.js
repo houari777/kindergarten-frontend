@@ -133,7 +133,7 @@ export const useCollection = (
     if (loadOnMount) {
       loadData(true);
     }
-  }, [loadOnMount]);
+  }, [loadOnMount, loadData]);
 
   const refresh = () => loadData(true);
   const loadMore = () => {

@@ -1,11 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Table, Button, Input, Select, Form, DatePicker, message } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Table, Button, Input, Select, Form, DatePicker, message, Modal } from 'antd';
 import axios from 'axios';
 import moment from 'moment';
 import 'moment/locale/ar';
 import 'moment/locale/fr';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import * as XLSX from 'xlsx';
 import { useTranslation } from 'react-i18next';
 
 const { Option } = Select;
@@ -23,13 +24,7 @@ function Bills() {
 
   const token = localStorage.getItem('token');
 
-  useEffect(() => {
-    fetchBills();
-    fetchChildren();
-    fetchParents();
-  }, []);
-
-  const fetchBills = async (params = {}) => {
+  const fetchBills = useCallback(async (params = {}) => {
     setLoading(true);
     try {
       const res = await axios.get('/api/bills', {
@@ -42,9 +37,9 @@ function Bills() {
       message.error(t('Failed to fetch bills'));
     }
     setLoading(false);
-  };
+  }, [token, t]);
 
-  const fetchChildren = async () => {
+  const fetchChildren = useCallback(async () => {
     try {
       const res = await axios.get('/api/children', {
         headers: { Authorization: `Bearer ${token}` },
@@ -52,11 +47,11 @@ function Bills() {
       setChildren(res.data.children || []);
     } catch (error) {
       console.error('Error fetching children:', error);
-      message.error('Failed to load children data');
+      message.error(t('Failed to fetch children'));
     }
-  };
+  }, [token, t]);
 
-  const fetchParents = async () => {
+  const fetchParents = useCallback(async () => {
     try {
       const res = await axios.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` },
@@ -65,9 +60,15 @@ function Bills() {
       setParents(res.data.users || []);
     } catch (error) {
       console.error('Error fetching parents:', error);
-      message.error('Failed to load parents data');
+      message.error(t('Failed to fetch parents'));
     }
-  };
+  }, [token, t]);
+
+  useEffect(() => {
+    fetchBills();
+    fetchChildren();
+    fetchParents();
+  }, [fetchBills, fetchChildren, fetchParents]);
 
   const handleAdd = () => {
     setEditingBill(null);
@@ -328,6 +329,6 @@ function Bills() {
       </Modal>
     </div>
   );
-};
+}
 
-export default Bills;
+export default Bills

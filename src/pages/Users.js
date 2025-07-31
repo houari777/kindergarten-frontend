@@ -1,20 +1,17 @@
-import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import axios from 'axios';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
-import { Table, Button, Modal, Form, Input, Select, message, DatePicker, Badge } from 'antd';
-import { SearchOutlined, PlusOutlined, EditOutlined, DeleteOutlined, UnlockOutlined, PoweroffOutlined } from '@ant-design/icons';
-import { Link } from 'react-router-dom';
+import { Table, Button, Modal, Form, Input, Select, message, DatePicker } from 'antd';
+import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
 import { useColumns } from './columns';
 import { useTranslation } from 'react-i18next';
+import * as XLSX from 'xlsx';
 
 const Users = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { token } = useAuth();
-  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -28,42 +25,37 @@ const Users = () => {
 
   const columns = useColumns(children);
 
-  useEffect(() => {
-    fetchUsers();
-    fetchChildren();
-  }, []);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axios.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` },
       });
       setUsers(res.data.users || []);
-    } catch (err) {
-      message.error(t('Network error'));
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error('Error fetching users:', error);
+      message.error(t('Failed to load users'));
     }
-  };
+    setLoading(false);
+  }, [token, t]);
 
-  const fetchChildren = async () => {
+  const fetchChildren = useCallback(async () => {
     try {
       const res = await axios.get('/api/children', {
         headers: { Authorization: `Bearer ${token}` },
       });
       setChildren(res.data.children || []);
-    } catch (err) {
-      setChildren([]);
-      message.error(t('Network error'));
+    } catch (error) {
+      console.error('Error fetching children:', error);
+      message.error(t('Failed to load children data'));
     }
-  };
+  }, [token, t]);
 
-  const handleSearch = (e) => {
-    setSearchTerm(e.target.value);
-  };
+  useEffect(() => {
+    fetchUsers();
+    fetchChildren();
+  }, [fetchUsers, fetchChildren]);
 
-  // فلترة متقدمة
   const filteredUsers = users.filter(user => {
     const matchesSearch =
       user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -73,11 +65,6 @@ const Users = () => {
     const matchesDate = dateFilter ? (user.createdAt && new Date(user.createdAt).toDateString() === dateFilter.format('ddd MMM DD YYYY')) : true;
     return matchesSearch && matchesRole && matchesStatus && matchesDate;
   });
-
-  const showModal = (user) => {
-    setSelectedUser(user);
-    setIsModalVisible(true);
-  };
 
   const handleOk = async () => {
     try {
@@ -102,28 +89,6 @@ const Users = () => {
     }
   };
 
-  const handleDelete = async (id) => {
-    Modal.confirm({
-      title: t('Are you sure you want to delete this user?'),
-      onOk: async () => {
-        try {
-          await axios.delete(`/api/users/${id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          message.success(t('User deleted successfully'));
-          fetchUsers();
-        } catch (err) {
-          message.error(t('Failed to delete user'));
-        }
-      },
-    });
-  };
-
-  const handleAdd = () => {
-    setSelectedUser(null);
-    setIsModalVisible(true);
-  };
-
   const exportToExcel = () => {
     const ws = XLSX.utils.json_to_sheet(filteredUsers);
     const wb = XLSX.utils.book_new();
@@ -133,20 +98,16 @@ const Users = () => {
 
   const exportToPDF = () => {
     try {
-      // Create a new jsPDF instance
       const doc = new jsPDF();
       
-      // Set document title
       doc.setFontSize(18);
       doc.text('Users Report', 14, 22);
       doc.setFontSize(11);
       doc.setTextColor(100);
       
-      // Prepare data for the table
       const tableColumn = ['Name', 'Email', 'Role', 'Status', 'Created At'];
       const tableRows = [];
       
-      // Add data to table rows
       filteredUsers.forEach(user => {
         const userData = [
           user.name || '-',
@@ -158,7 +119,6 @@ const Users = () => {
         tableRows.push(userData);
       });
       
-      // Add table using autoTable plugin
       autoTable(doc, {
         head: [tableColumn],
         body: tableRows,
@@ -181,7 +141,6 @@ const Users = () => {
         margin: { top: 30 }
       });
       
-      // Add footer
       const pageCount = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pageCount; i++) {
         doc.setPage(i);
@@ -192,7 +151,6 @@ const Users = () => {
         );
       }
       
-      // Save the PDF
       doc.save('users_report.pdf');
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -200,42 +158,9 @@ const Users = () => {
     }
   };
 
-  const handleView = (user) => {
-    showModal(user);
-  };
-
-  const handleChildren = (user) => {
-    showModal(user);
-  };
-
-  // تفعيل/تعطيل المستخدم
-  const handleToggleActive = async (user) => {
-    try {
-      await axios.patch(`/api/users/${user._id}/status`, { active: !user.active }, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      fetchUsers();
-      message.success(user.active ? t('User deactivated') : t('User activated'));
-    } catch (err) {
-      message.error(t('Network error'));
-    }
-  };
-
-  // إعادة تعيين كلمة المرور
-  const handleResetPassword = async (user) => {
-    try {
-      await axios.post(`/api/users/${user._id}/reset-password`, {}, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      message.success(t('Password reset link sent'));
-    } catch (err) {
-      message.error(t('Network error'));
-    }
-  };
-
   return (
     <div style={{ maxWidth: '100%', margin: '40px auto', padding: 24, fontFamily: 'Tajawal, Arial, sans-serif' }}>
-      <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: i18n.language === 'ar' ? 'right' : 'left', fontFamily: 'Tajawal, Arial, sans-serif' }}>{t('Users Management')}</h2>
+      <h2 style={{ marginBottom: 24, fontWeight: 700, fontSize: 28, color: '#1976d2', textAlign: t('Users Management') === 'إدارة المستخدمين' ? 'right' : 'left', fontFamily: 'Tajawal, Arial, sans-serif' }}>{t('Users Management')}</h2>
       <div style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-start' }}>
         <Input
           placeholder={t('Search') + '...'}
@@ -287,7 +212,6 @@ const Users = () => {
           rowKey="_id"
           pagination={{ pageSize: 10 }}
           style={{ minWidth: 1100, width: '100%', fontFamily: 'Tajawal, Arial, sans-serif' }}
-          rowClassName={(_, idx) => 'custom-table-row'}
         />
       </div>
       <Modal
@@ -323,4 +247,3 @@ const Users = () => {
 };
 
 export default Users;
- 

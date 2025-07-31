@@ -41,6 +41,8 @@
     "xlsx": "^0.18.5"
   },
   "scripts": {
+    "lint": "eslint src --ext .js,.jsx",
+    "lint:fix": "eslint src --ext .js,.jsx --fix",
     "start": "serve -s build",
     "build": "craco build",
     "test": "craco test",
