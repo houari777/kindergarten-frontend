@@ -8,7 +8,7 @@ import { SearchOutlined, PlusOutlined } from '@ant-design/icons';
 
 import { useTranslation } from 'react-i18next';
 import * as XLSX from 'xlsx';
-import {useAuth} from "contexts/AuthContext";
+import { useAuth } from '../contexts/AuthContext';
 
 const Users = () => {
   const { t } = useTranslation();

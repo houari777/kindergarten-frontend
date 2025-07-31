@@ -22,7 +22,7 @@ import {
   deleteDoc,
   getDoc
 } from 'firebase/firestore';
-import {db} from "firebase/config";
+import {db} from "../firebase/config";
 
 const ChildrenList = () => {
   const [children, setChildren] = useState([]);
